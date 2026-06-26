@@ -41,7 +41,8 @@ bertscore("how much do you agree", "to what extent do you agree")
 \references{
 Zhang, T., Kishore, V., Wu, F., Weinberger, K. Q., & Artzi, Y. (2020).
 BERTScore: Evaluating text generation with BERT. \emph{International Conference
-on Learning Representations (ICLR)}. \doi{10.48550/arXiv.1904.09675}
+on Learning Representations (ICLR)}.
+\url{https://doi.org/10.48550/arXiv.1904.09675}
 }
 \seealso{
 \code{\link[=token_embeddings]{token_embeddings()}} for the embeddings this uses, and

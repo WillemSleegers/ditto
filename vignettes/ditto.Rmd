@@ -142,6 +142,36 @@ llama-server -m all-MiniLM-L6-v2-f16.gguf --embedding --pooling none --port 8080
 The default `host` argument points at `http://localhost:8080`; pass a
 different URL if the server runs elsewhere.
 
+Rather than start the server by hand, `start_llama_server()` launches it for
+you with the right flags and waits until it is ready to answer requests.
+`stop_llama_server()` shuts it down again, and `llama_server_running()` reports
+whether a server is responding. Give it the paths to your `llama-server`
+binary and `.gguf` model; `exe` can be omitted if `llama-server` is on your
+`PATH`.
+
+```{r}
+#| label: start-server
+#| eval: false
+start_llama_server(
+  model = "path/to/all-MiniLM-L6-v2-f16.gguf",
+  exe = "path/to/llama-server"
+)
+llama_server_running()
+```
+
+If you set the binary and model paths once as options in your `.Rprofile`,
+`start_llama_server()` needs no arguments:
+
+```{r}
+#| label: server-options
+#| eval: false
+options(
+  ditto.llama_server = "path/to/llama-server",
+  ditto.llama_model = "path/to/all-MiniLM-L6-v2-f16.gguf"
+)
+start_llama_server()
+```
+
 ### Computing a score
 
 With the server running, `bertscore()` returns a named vector of precision,

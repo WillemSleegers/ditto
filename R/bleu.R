@@ -24,7 +24,7 @@
 #' Papineni, K., Roukos, S., Ward, T., & Zhu, W.-J. (2002). BLEU: a method for
 #' automatic evaluation of machine translation. *Proceedings of the 40th
 #' Annual Meeting of the Association for Computational Linguistics*, 311-318.
-#' \doi{10.3115/1073083.1073135}
+#' <https://doi.org/10.3115/1073083.1073135>
 #' @export
 #' @examples
 #' bleu(
