@@ -198,6 +198,56 @@ bertscore_baseline <- function(texts = NULL,
   rowMeans(scores)
 }
 
+#' Estimate a BERTScore baseline per language
+#'
+#' Convenience wrapper that runs [bertscore_baseline()] once for each language
+#' in a labelled corpus, since the baseline is language-specific. Useful for
+#' multilingual models such as bge-m3, where you score text in several languages
+#' and want each rescaled against its own floor.
+#'
+#' @param data A data frame with a language column and a text column. Defaults
+#'   to [example_sentences].
+#' @param host Base URL of the llama.cpp server.
+#' @param prefix Optional task prefix; see [token_embeddings()]. Default `""`.
+#' @param n Number of random pairs to average over per language. Default `400`.
+#' @param seed Optional integer seed for reproducible pairing, applied to each
+#'   language. The global random state is restored afterwards.
+#' @param language_col,text_col Column names holding the language label and the
+#'   text. Default `"language"` and `"text"`.
+#' @return A named list with one baseline per language, each a named numeric
+#'   vector as returned by [bertscore_baseline()]. Index it by language code to
+#'   get a `baseline` for [bertscore()], e.g. `baselines[["nl"]]`.
+#' @seealso [bertscore_baseline()] for a single baseline and [bertscore()],
+#'   which consumes one.
+#' @export
+#' @examples
+#' \dontrun{
+#' baselines <- bertscore_baselines()
+#' bertscore("in hoeverre bent u het eens", "hoeveel bent u het eens",
+#'           baseline = baselines[["nl"]])
+#' }
+bertscore_baselines <- function(data = example_sentences,
+                                host = "http://localhost:8080",
+                                prefix = "",
+                                n = 400L,
+                                seed = NULL,
+                                language_col = "language",
+                                text_col = "text") {
+  missing_cols <- setdiff(c(language_col, text_col), names(data))
+  if (length(missing_cols) > 0) {
+    stop("`data` is missing column(s): ", paste(missing_cols, collapse = ", "),
+         ".", call. = FALSE)
+  }
+
+  languages <- unique(data[[language_col]])
+  baselines <- lapply(languages, function(lg) {
+    texts <- data[[text_col]][data[[language_col]] == lg]
+    bertscore_baseline(texts, host = host, prefix = prefix, n = n, seed = seed)
+  })
+  names(baselines) <- languages
+  baselines
+}
+
 # Row-normalize an embedding matrix so rows are unit vectors (cosine ready).
 normalize_rows <- function(m) {
   m / sqrt(rowSums(m^2))

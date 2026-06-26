@@ -60,3 +60,10 @@ test_that("bertscore_baseline requires at least two distinct texts", {
     "at least two distinct"
   )
 })
+
+test_that("bertscore_baselines validates the required columns", {
+  expect_error(
+    bertscore_baselines(data.frame(lang = "en", text = "hello")),
+    "missing column"
+  )
+})

@@ -342,14 +342,16 @@ bertscore(
 ```
 
 The baseline is specific to the model and the language, so estimate it from text
-that matches your use. For a multilingual model, build a baseline for each
-language from the relevant rows of `example_sentences` (or your own corpus):
+that matches your use. For a multilingual model, `bertscore_baselines()` returns
+one baseline per language from a labelled corpus (`example_sentences` by
+default), so each language can be rescaled against its own floor:
 
 ```{r}
 #| label: baseline-language
 #| eval: false
-dutch <- example_sentences$text[example_sentences$language == "nl"]
-nl_baseline <- bertscore_baseline(dutch, seed = 1)
+baselines <- bertscore_baselines(seed = 1)
+bertscore("in hoeverre bent u het eens", "hoeveel bent u het eens",
+          baseline = baselines[["nl"]])
 ```
 
 ## Choosing a metric

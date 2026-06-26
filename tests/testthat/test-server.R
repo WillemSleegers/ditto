@@ -97,4 +97,10 @@ test_that("a real server can be started, queried, and stopped", {
   cmp <- compare_strings("how much do you agree", "to what extent do you agree",
                          bert = TRUE, host = host, pooling = "cls")
   expect_true("cosine_emb" %in% names(cmp))
+
+  # Per-language baselines: one named entry per language, each a P/R/F1 vector.
+  baselines <- bertscore_baselines(host = host, n = 30, seed = 1)
+  expect_setequal(names(baselines), unique(example_sentences$language))
+  expect_named(baselines[["nl"]], c("precision", "recall", "f1"))
+  expect_true(all(baselines[["nl"]] > 0 & baselines[["nl"]] < 1))
 })

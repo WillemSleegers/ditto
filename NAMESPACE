@@ -2,6 +2,7 @@
 
 export(bertscore)
 export(bertscore_baseline)
+export(bertscore_baselines)
 export(bleu)
 export(clean)
 export(compare_strings)
