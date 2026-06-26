@@ -1,0 +1,30 @@
+Package: ditto
+Title: String and Text Similarity Metrics
+Version: 0.0.0.9000
+Authors@R:
+    person("Willem", "Sleegers", , "w.sleegers@me.com", role = c("aut", "cre"))
+Description: Utilities for comparing strings and short texts. Includes a
+    from-scratch BLEU implementation and a BERTScore metric computed from
+    token-level embeddings served by a local 'llama.cpp' server, alongside a
+    unified compare_strings() interface that returns edit-distance, n-gram,
+    and embedding-based similarity scores in a single table.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.1.0)
+Imports:
+    httr2,
+    purrr,
+    stringdist,
+    stringr,
+    tibble
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+URL: https://github.com/WillemSleegers/ditto
+BugReports: https://github.com/WillemSleegers/ditto/issues
+Config/roxygen2/version: 8.0.0

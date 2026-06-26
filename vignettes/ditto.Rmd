@@ -1,0 +1,214 @@
+---
+title: "Comparing strings with ditto"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Comparing strings with ditto}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: knitr-setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+#| label: setup
+#| message: false
+library(ditto)
+```
+
+`ditto` compares two pieces of text and reduces the comparison to a single
+number, so that comparisons can be ranked, filtered, or summarised at scale.
+Typical uses are checking whether a survey question has been reworded across
+waves, comparing a translation against its source, and grouping near-duplicate
+free-text responses.
+
+The package collects metrics that differ in what they treat as a meaningful
+difference. The edit-distance, Jaccard, and cosine metrics come from
+[`stringdist`](https://github.com/markvanderloo/stringdist) and compare
+characters; `bleu()` compares word sequences; and `bertscore()` compares
+meaning through contextual embeddings. `compare_strings()` runs the
+character- and word-level metrics together and returns them in one table.
+
+## Cleaning text
+
+Two strings can differ only in capitalisation or punctuation while expressing
+exactly the same thing. `clean()` removes those surface differences by
+lowercasing, stripping punctuation, and collapsing repeated whitespace, so
+that they do not lower the similarity scores.
+
+```{r}
+#| label: clean
+clean("To what extent do you AGREE with the statement?")
+```
+
+The rest of this vignette compares a reference survey question against four
+variants that range from a near-identical rewording to an unrelated question.
+Each string is cleaned first.
+
+```{r}
+#| label: data
+reference <- clean("To what extent do you agree with the following statements?")
+
+variants <- c(
+  "To what extent do you agree with the following statement?",
+  "How much do you agree with each of the statements below?",
+  "How satisfied are you with the service you received?",
+  "What is your highest level of education completed?"
+)
+labels <- c("Near-identical", "Paraphrase", "Different", "Unrelated")
+variants <- clean(variants)
+```
+
+## Character and word metrics
+
+`compare_strings()` computes four metrics for each candidate against the
+reference and returns a tibble with one row per pair. Three are character
+metrics from `stringdist`: Levenshtein (single-character edits), Jaccard
+(overlap of the character sets), and cosine (overlap of character
+frequencies). The fourth is BLEU, which is described below.
+
+```{r}
+#| label: compare
+result <- compare_strings(variants, reference)
+cbind(label = labels, round(result[, -(1:2)], 2))
+```
+
+The near-identical variant scores near 1 on every metric. The other three
+diverge in ways that reveal what each metric responds to. The unrelated
+question still scores 0.92 on cosine, because it happens to reuse many of the
+same characters. None of these metrics compares meaning, so surface overlap
+can make an unrelated string look similar.
+
+## BLEU
+
+`bleu()` evaluates a candidate against a reference at the level of word
+sequences rather than characters. It counts how many of the candidate's
+n-grams (single words, pairs, triples, and 4-word sequences) also appear in
+the reference, credits each reference n-gram only as many times as it occurs,
+and applies a penalty when the candidate is shorter than the reference. The
+maximum n-gram order is capped at the length of the shorter string, so short
+inputs are scored on the orders that are actually possible.
+
+```{r}
+#| label: bleu
+bleu(
+  "how much do you agree with the statement",
+  "to what extent do you agree with the statement"
+)
+```
+
+BLEU returns 0 when any n-gram order has no matches at all, which is why the
+"Different" and "Unrelated" variants score 0 in the table above: neither
+shares a 4-word sequence with the reference. This makes BLEU stricter than the
+character metrics on word order, and well suited to translation evaluation,
+where the arrangement of words carries meaning.
+
+## Semantic similarity with BERTScore
+
+The metrics so far compare the characters or words that are present. A
+paraphrase that conveys the same meaning with different words scores low on
+all of them. `bertscore()` compares meaning instead. It embeds each token in
+the context of its sentence, matches every candidate token to its most similar
+reference token, and reports precision, recall, and their harmonic mean (F1).
+
+This is the only part of the package that needs an external model, because it
+requires one embedding *per token* rather than one pooled vector per string.
+
+### Setting up the embedding server
+
+`bertscore()` reads per-token embeddings from a local
+[`llama.cpp`](https://github.com/ggml-org/llama.cpp) server. The friendly
+local runners, Ollama and LM Studio, return only a single pooled vector per
+string through their OpenAI-style endpoints, so they cannot supply the
+token-level embeddings this metric needs. A `llama.cpp` server started with
+`--pooling none` can.
+
+1. Download the prebuilt `llama.cpp` binaries for your platform from the
+   [releases page](https://github.com/ggml-org/llama.cpp/releases) (no
+   compilation required).
+2. Download an embedding model in GGUF format. `all-MiniLM-L6-v2` is small and
+   works well here. Prefer a model without a required task prefix; models such
+   as `nomic-embed-text` prepend tokens like `search_document:` that would be
+   matched along with the real text.
+3. Start the server with embeddings and pooling disabled:
+
+```sh
+llama-server -m all-MiniLM-L6-v2-f16.gguf --embedding --pooling none --port 8080
+```
+
+The default `host` argument points at `http://localhost:8080`; pass a
+different URL if the server runs elsewhere.
+
+### Computing a score
+
+With the server running, `bertscore()` returns a named vector of precision,
+recall, and F1. The following examples are not run when this vignette is
+built, since they depend on the server; the output shown is from a live run
+against `all-MiniLM-L6-v2`.
+
+```{r}
+#| label: bertscore
+#| eval: false
+bertscore("how much do you agree", "to what extent do you agree")
+#>  precision     recall         f1
+#>      0.599      0.583      0.591
+
+bertscore("what is your date of birth", "to what extent do you agree")
+#>  precision     recall         f1
+#>      0.114      0.102      0.108
+```
+
+The paraphrase scores 0.59 and the unrelated question 0.11. The separation
+reflects meaning rather than shared characters. `token_embeddings()` exposes
+the underlying matrix if you want to inspect it directly; it has one row per
+token, after dropping the model's special tokens, and one column per embedding
+dimension.
+
+```{r}
+#| label: token-embeddings
+#| eval: false
+dim(token_embeddings("to what extent do you agree"))
+#> [1]   6 384
+```
+
+### BERTScore alongside the other metrics
+
+Setting `bert = TRUE` adds a BERTScore F1 column to `compare_strings()`. The
+full table makes the difference between surface and semantic similarity
+visible. The numbers below are from a live run.
+
+```{r}
+#| label: compare-bert
+#| eval: false
+compare_strings(variants, reference, bert = TRUE)
+```
+
+| label          | levenshtein | jaccard | cosine | bleu | bertscore_f1 |
+|:---------------|------------:|--------:|-------:|-----:|-------------:|
+| Near-identical |        0.98 |    1.00 |   1.00 | 0.88 |         0.92 |
+| Paraphrase     |        0.49 |    0.86 |   0.94 | 0.26 |         0.78 |
+| Different      |        0.35 |    0.67 |   0.84 | 0.00 |         0.23 |
+| Unrelated      |        0.25 |    0.82 |   0.92 | 0.00 |         0.17 |
+
+The paraphrase keeps a high BERTScore (0.78) even though its BLEU is low
+(0.26), because it preserves meaning while changing words. The unrelated
+question drops to 0.17 on BERTScore, where cosine left it at a misleading
+0.92.
+
+## Choosing a metric
+
+The metrics answer different questions, so the choice follows from what counts
+as a difference.
+
+- Use the **character metrics** when responses should closely match the
+  reference and you expect only typos, small edits, or reordering. They are
+  fast and need no external model. Cosine is usually the most informative of
+  the three; Jaccard adds little beside it.
+- Use **BLEU** when word order matters, such as translation evaluation, and
+  you want a candidate penalised for rearranging or dropping words.
+- Use **BERTScore** when paraphrasing is expected and valid responses may use
+  different words for the same meaning. It is the only metric here that scores
+  such responses correctly, at the cost of running a local embedding server.
