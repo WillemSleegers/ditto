@@ -4,7 +4,13 @@
 \alias{bertscore}
 \title{Compute a BERTScore}
 \usage{
-bertscore(candidate, reference, host = "http://localhost:8080", prefix = "")
+bertscore(
+  candidate,
+  reference,
+  host = "http://localhost:8080",
+  prefix = "",
+  baseline = NULL
+)
 }
 \arguments{
 \item{candidate}{A single candidate string.}
@@ -16,6 +22,12 @@ bertscore(candidate, reference, host = "http://localhost:8080", prefix = "")
 \item{prefix}{Optional task prefix required by some models (e.g. \code{"query: "}
 for the E5 family). Applied to both strings and stripped before matching;
 see \code{\link[=token_embeddings]{token_embeddings()}}. Default \code{""}.}
+
+\item{baseline}{Optional baseline for rescaling, as returned by
+\code{\link[=bertscore_baseline]{bertscore_baseline()}} (a named \code{precision}/\code{recall}/\code{f1} vector) or a
+single number applied to all three. Each score \code{x} is rescaled to
+\code{(x - b) / (1 - b)}, which maps the unrelated-text floor to 0 and widens
+the usable range. Default \code{NULL} (raw scores).}
 }
 \value{
 A named numeric vector with \code{precision}, \code{recall}, and \code{f1}.
@@ -49,6 +61,7 @@ on Learning Representations (ICLR)}.
 \url{https://doi.org/10.48550/arXiv.1904.09675}
 }
 \seealso{
-\code{\link[=token_embeddings]{token_embeddings()}} for the embeddings this uses, and
-\code{\link[=compare_strings]{compare_strings()}} to report it next to the surface metrics.
+\code{\link[=token_embeddings]{token_embeddings()}} for the embeddings this uses,
+\code{\link[=bertscore_baseline]{bertscore_baseline()}} to estimate a \code{baseline}, and \code{\link[=compare_strings]{compare_strings()}}
+to report it next to the surface metrics.
 }

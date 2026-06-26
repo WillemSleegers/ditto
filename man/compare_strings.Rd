@@ -9,7 +9,8 @@ compare_strings(
   reference,
   bert = FALSE,
   host = "http://localhost:8080",
-  prefix = ""
+  prefix = "",
+  baseline = NULL
 )
 }
 \arguments{
@@ -21,6 +22,10 @@ compare_strings(
 
 \item{prefix}{Optional task prefix passed to \code{\link[=bertscore]{bertscore()}} for models that
 require one (e.g. \code{"query: "}), used when \code{bert = TRUE}. Default \code{""}.}
+
+\item{baseline}{Optional BERTScore baseline passed to \code{\link[=bertscore]{bertscore()}} for
+rescaling, used when \code{bert = TRUE}; see \code{\link[=bertscore_baseline]{bertscore_baseline()}}. Default
+\code{NULL}.}
 }
 \value{
 A \link[tibble:tibble]{tibble} with one row per input pair, containing

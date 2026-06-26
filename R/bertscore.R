@@ -97,9 +97,15 @@ count_tokens <- function(text, host = "http://localhost:8080") {
 #' @param prefix Optional task prefix required by some models (e.g. `"query: "`
 #'   for the E5 family). Applied to both strings and stripped before matching;
 #'   see [token_embeddings()]. Default `""`.
+#' @param baseline Optional baseline for rescaling, as returned by
+#'   [bertscore_baseline()] (a named `precision`/`recall`/`f1` vector) or a
+#'   single number applied to all three. Each score `x` is rescaled to
+#'   `(x - b) / (1 - b)`, which maps the unrelated-text floor to 0 and widens
+#'   the usable range. Default `NULL` (raw scores).
 #' @return A named numeric vector with `precision`, `recall`, and `f1`.
-#' @seealso [token_embeddings()] for the embeddings this uses, and
-#'   [compare_strings()] to report it next to the surface metrics.
+#' @seealso [token_embeddings()] for the embeddings this uses,
+#'   [bertscore_baseline()] to estimate a `baseline`, and [compare_strings()]
+#'   to report it next to the surface metrics.
 #' @references
 #' Zhang, T., Kishore, V., Wu, F., Weinberger, K. Q., & Artzi, Y. (2020).
 #' BERTScore: Evaluating text generation with BERT. *International Conference
@@ -111,17 +117,119 @@ count_tokens <- function(text, host = "http://localhost:8080") {
 #' bertscore("how much do you agree", "to what extent do you agree")
 #' }
 bertscore <- function(candidate, reference, host = "http://localhost:8080",
-                      prefix = "") {
-  cand <- token_embeddings(candidate, host = host, prefix = prefix)
-  ref <- token_embeddings(reference, host = host, prefix = prefix)
+                      prefix = "", baseline = NULL) {
+  cand <- normalize_rows(token_embeddings(candidate, host = host, prefix = prefix))
+  ref <- normalize_rows(token_embeddings(reference, host = host, prefix = prefix))
 
-  cand_n <- cand / sqrt(rowSums(cand^2))
-  ref_n <- ref / sqrt(rowSums(ref^2))
+  score <- score_normed(cand, ref)
+  if (!is.null(baseline)) {
+    score <- rescale_score(score, baseline)
+  }
+  score
+}
 
-  sim <- cand_n %*% t(ref_n)
+#' Estimate a BERTScore baseline from unrelated text
+#'
+#' Estimates the BERTScore an embedding model assigns to unrelated text, so
+#' scores can be rescaled to span a useful range (see the `baseline` argument
+#' of [bertscore()]). Some models, such as bge-m3, place even unrelated
+#' sentences at a high cosine similarity; subtracting this floor restores the
+#' separation between matched and unmatched pairs.
+#'
+#' @details
+#' The baseline is the mean score over `n` random, and therefore unrelated,
+#' pairs drawn from `texts`. It is specific to the model *and* the language, so
+#' estimate it from text representative of your use. Each sentence is embedded
+#' once and reused across pairs, so a few hundred pairs are cheap to score.
+#'
+#' @param texts Character vector of distinct, mutually unrelated sentences.
+#'   Defaults to the English rows of [example_sentences]. For a multilingual
+#'   model, pass text in the language you will score.
+#' @param host Base URL of the llama.cpp server.
+#' @param prefix Optional task prefix; see [token_embeddings()]. Must match the
+#'   prefix used when scoring. Default `""`.
+#' @param n Number of random pairs to average over. Default `400`.
+#' @param seed Optional integer seed for reproducible pairing. The global random
+#'   state is restored afterwards.
+#' @return A named numeric vector with the baseline `precision`, `recall`, and
+#'   `f1`, suitable to pass as `baseline` to [bertscore()].
+#' @seealso [bertscore()], which consumes the result.
+#' @export
+#' @examples
+#' \dontrun{
+#' b <- bertscore_baseline()
+#' bertscore("how much do you agree", "to what extent do you agree",
+#'           baseline = b)
+#' }
+bertscore_baseline <- function(texts = NULL,
+                               host = "http://localhost:8080",
+                               prefix = "",
+                               n = 400L,
+                               seed = NULL) {
+  if (is.null(texts)) {
+    texts <- example_sentences$text[example_sentences$language == "en"]
+  }
+  texts <- unique(texts)
+  if (length(texts) < 2) {
+    stop("`texts` must contain at least two distinct strings.", call. = FALSE)
+  }
+
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = globalenv())) {
+      old_seed <- get(".Random.seed", envir = globalenv())
+      on.exit(assign(".Random.seed", old_seed, envir = globalenv()), add = TRUE)
+    }
+    set.seed(seed)
+  }
+
+  embs <- lapply(texts, function(t) {
+    normalize_rows(token_embeddings(t, host = host, prefix = prefix))
+  })
+
+  m <- length(texts)
+  scores <- vapply(seq_len(n), function(k) {
+    ij <- sample.int(m, 2)
+    score_normed(embs[[ij[1]]], embs[[ij[2]]])
+  }, numeric(3))
+
+  rowMeans(scores)
+}
+
+# Row-normalize an embedding matrix so rows are unit vectors (cosine ready).
+normalize_rows <- function(m) {
+  m / sqrt(rowSums(m^2))
+}
+
+# Greedy-matched precision/recall/f1 from two row-normalized matrices.
+score_normed <- function(cand, ref) {
+  sim <- cand %*% t(ref)
   precision <- mean(apply(sim, 1, max))
   recall <- mean(apply(sim, 2, max))
   f1 <- 2 * precision * recall / (precision + recall)
-
   c(precision = precision, recall = recall, f1 = f1)
+}
+
+# Apply (x - b) / (1 - b) per component.
+rescale_score <- function(score, baseline) {
+  b <- resolve_baseline(baseline, names(score))
+  (score - b) / (1 - b)
+}
+
+# Coerce `baseline` to a vector aligned with `nms` (precision/recall/f1).
+resolve_baseline <- function(baseline, nms) {
+  if (length(baseline) == 1 && is.null(names(baseline))) {
+    out <- rep(baseline, length(nms))
+    names(out) <- nms
+    return(out)
+  }
+  if (is.null(names(baseline))) {
+    stop("`baseline` must be a single number or a named vector with ",
+         "precision, recall, and f1.", call. = FALSE)
+  }
+  missing <- setdiff(nms, names(baseline))
+  if (length(missing) > 0) {
+    stop("`baseline` is missing components: ",
+         paste(missing, collapse = ", "), ".", call. = FALSE)
+  }
+  baseline[nms]
 }

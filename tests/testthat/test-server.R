@@ -66,4 +66,17 @@ test_that("a real server can be started, queried, and stopped", {
   )
   expect_named(score, c("precision", "recall", "f1"))
   expect_true(all(score >= 0 & score <= 1))
+
+  # Baseline estimation returns a sane named vector, and rescaling against it
+  # lowers a score (the floor is positive).
+  baseline <- bertscore_baseline(host = host, n = 50, seed = 1)
+  expect_named(baseline, c("precision", "recall", "f1"))
+  expect_true(all(baseline > 0 & baseline < 1))
+
+  rescaled <- bertscore(
+    "how much do you agree",
+    "to what extent do you agree",
+    host = host, baseline = baseline
+  )
+  expect_true(rescaled[["f1"]] < score[["f1"]])
 })
