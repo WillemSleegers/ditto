@@ -69,21 +69,34 @@ compare_strings(
   reference = rep(reference, length(variants))
 )
 
-# 5. BERTScore (needs a local llama.cpp embedding server) ----------------------
+# 5. Embedding metrics (need a local llama.cpp embedding server) ---------------
 # The start_/stop_llama_server() helpers launch the server for you. Point them
 # at your llama-server binary and a .gguf embedding model. You can also set
 # these once in your .Rprofile via options(ditto.llama_server=, ditto.llama_model=)
 # and then call start_llama_server() with no arguments.
+#
+# bge-m3 is multilingual, needs no task prefix, and uses CLS pooling (so pass
+# pooling = "cls" to the cosine metric). all-MiniLM-L6-v2 is a smaller,
+# English-only, mean-pooling alternative.
 
 llama_exe   <- "C:/Users/wslee/tools/llama.cpp/llama-server.exe"
-llama_model <- "C:/Users/wslee/tools/llama.cpp/models/all-MiniLM-L6-v2-f16.gguf"
+llama_model <- "C:/Users/wslee/tools/llama.cpp/models/bge-m3-f16.gguf"
 
 start_llama_server(model = llama_model, exe = llama_exe)  # waits until ready
 llama_server_running()                                    # TRUE when up
 
 token_embeddings("hello world")                 # matrix: tokens x dims
 bertscore("the cat sat on the mat", "a cat is on the mat")
-compare_strings(variants, rep(reference, length(variants)), bert = TRUE)
+cosine_similarity("the cat sat on the mat", "a cat is on the mat", pooling = "cls")
+
+# All metrics in one table, with the embedding columns (pooling = "cls" for bge-m3).
+compare_strings(variants, rep(reference, length(variants)),
+                bert = TRUE, pooling = "cls")
+
+# Baseline rescaling: estimate the unrelated-text floor, then rescale.
+baseline <- bertscore_baseline(seed = 1)        # defaults to English example_sentences
+compare_strings(variants, rep(reference, length(variants)),
+                bert = TRUE, pooling = "cls", baseline = baseline)
 
 stop_llama_server()                              # shut it down when done
 

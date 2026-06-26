@@ -28,9 +28,11 @@ free-text responses.
 The package collects metrics that differ in what they treat as a meaningful
 difference. The edit-distance, Jaccard, and cosine metrics come from
 [`stringdist`](https://github.com/markvanderloo/stringdist) and compare
-characters; `bleu()` compares word sequences; and `bertscore()` compares
-meaning through contextual embeddings. `compare_strings()` runs the
-character- and word-level metrics together and returns them in one table.
+characters; `bleu()` compares word sequences; and the embedding metrics,
+`bertscore()` and `cosine_similarity()`, compare meaning through contextual
+embeddings. `compare_strings()` runs the character- and word-level metrics
+together, and the embedding metrics too when an embedding server is available,
+returning them in one table.
 
 ## Cleaning text
 
@@ -78,8 +80,10 @@ cbind(label = labels, round(result[, -(1:2)], 2))
 
 The near-identical variant scores near 1 on every metric. The other three
 diverge in ways that reveal what each metric responds to. The unrelated
-question still scores 0.92 on cosine, because it happens to reuse many of the
-same characters. None of these metrics compares meaning, so surface overlap
+question still scores 0.92 on cosine -- here a *character* cosine, the overlap
+of character frequencies, not to be confused with the meaning-based
+`cosine_similarity()` introduced later -- because it happens to reuse many of
+the same characters. None of these metrics compares meaning, so surface overlap
 can make an unrelated string look similar.
 
 ## BLEU
@@ -106,37 +110,41 @@ shares a 4-word sequence with the reference. This makes BLEU stricter than the
 character metrics on word order, and well suited to translation evaluation,
 where the arrangement of words carries meaning.
 
-## Semantic similarity with BERTScore
+## Semantic similarity with embeddings
 
 The metrics so far compare the characters or words that are present. A
-paraphrase that conveys the same meaning with different words scores low on
-all of them. `bertscore()` compares meaning instead. It embeds each token in
-the context of its sentence, matches every candidate token to its most similar
-reference token, and reports precision, recall, and their harmonic mean (F1).
+paraphrase that conveys the same meaning with different words scores low on all
+of them. The package's two embedding metrics compare *meaning* instead.
+`bertscore()` embeds each token in the context of its sentence and matches every
+candidate token to its most similar reference token, reporting precision,
+recall, and their harmonic mean (F1). `cosine_similarity()` instead pools each
+string into a single vector and takes the cosine between the two.
 
-This is the only part of the package that needs an external model, because it
-requires one embedding *per token* rather than one pooled vector per string.
+These are the only parts of the package that need an external model, because
+they require one embedding *per token* rather than one pooled vector per string.
 
 ### Setting up the embedding server
 
-`bertscore()` reads per-token embeddings from a local
+`bertscore()` and `cosine_similarity()` read per-token embeddings from a local
 [`llama.cpp`](https://github.com/ggml-org/llama.cpp) server. The friendly
 local runners, Ollama and LM Studio, return only a single pooled vector per
 string through their OpenAI-style endpoints, so they cannot supply the
-token-level embeddings this metric needs. A `llama.cpp` server started with
+token-level embeddings these metrics need. A `llama.cpp` server started with
 `--pooling none` can.
 
 1. Download the prebuilt `llama.cpp` binaries for your platform from the
    [releases page](https://github.com/ggml-org/llama.cpp/releases) (no
    compilation required).
-2. Download an embedding model in GGUF format. `all-MiniLM-L6-v2` is small and
-   works well here. Prefer a model without a required task prefix; models such
-   as `nomic-embed-text` prepend tokens like `search_document:` that would be
-   matched along with the real text.
+2. Download an embedding model in GGUF format. This vignette uses
+   [`bge-m3`](https://huggingface.co/BAAI/bge-m3), a multilingual model that
+   needs no task prefix; `all-MiniLM-L6-v2` is a smaller, English-only
+   alternative. Some models, such as the E5 family, require a task prefix like
+   `"query: "`; pass it through the `prefix` argument so its tokens are stripped
+   before matching, rather than treated as part of the text.
 3. Start the server with embeddings and pooling disabled:
 
 ```sh
-llama-server -m all-MiniLM-L6-v2-f16.gguf --embedding --pooling none --port 8080
+llama-server -m bge-m3-f16.gguf --embedding --pooling none --port 8080
 ```
 
 The default `host` argument points at `http://localhost:8080`; pass a
@@ -153,7 +161,7 @@ binary and `.gguf` model; `exe` can be omitted if `llama-server` is on your
 #| label: start-server
 #| eval: false
 start_llama_server(
-  model = "path/to/all-MiniLM-L6-v2-f16.gguf",
+  model = "path/to/bge-m3-f16.gguf",
   exe = "path/to/llama-server"
 )
 llama_server_running()
@@ -167,66 +175,117 @@ If you set the binary and model paths once as options in your `.Rprofile`,
 #| eval: false
 options(
   ditto.llama_server = "path/to/llama-server",
-  ditto.llama_model = "path/to/all-MiniLM-L6-v2-f16.gguf"
+  ditto.llama_model = "path/to/bge-m3-f16.gguf"
 )
 start_llama_server()
 ```
 
-### Computing a score
+### Computing a BERTScore
 
 With the server running, `bertscore()` returns a named vector of precision,
-recall, and F1. The following examples are not run when this vignette is
+recall, and F1. The examples that follow are not run when this vignette is
 built, since they depend on the server; the output shown is from a live run
-against `all-MiniLM-L6-v2`.
+against `bge-m3`.
 
 ```{r}
 #| label: bertscore
 #| eval: false
 bertscore("how much do you agree", "to what extent do you agree")
 #>  precision     recall         f1
-#>      0.599      0.583      0.591
+#>      0.944      0.938      0.941
 
 bertscore("what is your date of birth", "to what extent do you agree")
 #>  precision     recall         f1
-#>      0.114      0.102      0.108
+#>      0.709      0.720      0.714
 ```
 
-The paraphrase scores 0.59 and the unrelated question 0.11. The separation
-reflects meaning rather than shared characters. `token_embeddings()` exposes
-the underlying matrix if you want to inspect it directly; it has one row per
-token, after dropping the model's special tokens, and one column per embedding
-dimension.
+The paraphrase scores 0.94 and the unrelated question 0.71. Both are high:
+`bge-m3` places even unrelated text at a substantial similarity, so the raw
+separation is narrow. The ordering is correct, but these scores need calibrating
+before they are comfortable as thresholds; *Calibrating scores with a baseline*
+below does exactly that. `token_embeddings()` exposes the underlying matrix if
+you want to inspect it directly; it has one row per token, after dropping the
+model's special tokens, and one column per embedding dimension.
 
 ```{r}
 #| label: token-embeddings
 #| eval: false
 dim(token_embeddings("to what extent do you agree"))
-#> [1]   6 384
+#> [1]    6 1024
 ```
 
-### BERTScore alongside the other metrics
+### Whole-string cosine
 
-Setting `bert = TRUE` adds a BERTScore F1 column to `compare_strings()`. The
-full table makes the difference between surface and semantic similarity
-visible. The numbers below are from a live run.
+`cosine_similarity()` is the pooled counterpart to `bertscore()`: instead of
+matching tokens, it collapses each string into a single vector and takes the
+cosine between them. It is faster and is the classic sentence-embedding
+similarity. Because the server returns per-token vectors, the pooling into one
+vector happens in R, controlled by `pooling`. `"mean"` averages the token
+vectors, as sentence-transformers models like `all-MiniLM` and the E5 family do;
+`"cls"` takes the leading special token's vector, as BGE models like `bge-m3` do.
+Use the pooling your model was trained with.
+
+```{r}
+#| label: cosine
+#| eval: false
+# bge-m3 is a CLS-pooling model.
+cosine_similarity("how much do you agree", "to what extent do you agree",
+                  pooling = "cls")
+#> [1] 0.892
+cosine_similarity("what is your date of birth", "to what extent do you agree",
+                  pooling = "cls")
+#> [1] 0.474
+```
+
+With the matching CLS pooling the unrelated pair drops to 0.47 while the
+paraphrase stays at 0.89, a wider gap than mean pooling gives (0.72 versus 0.95),
+because the mean blurs a sentence into an average that even unrelated questions
+share. This `cosine_similarity()` compares meaning and should not be confused
+with the character-frequency `cosine` column of `compare_strings()`.
+
+### Matching across languages
+
+Because `bge-m3` is multilingual, the embedding metrics recognise a paraphrase
+even across languages, where the character and word metrics see no overlap at
+all. Comparing the English reference with its Dutch translation:
+
+```{r}
+#| label: multilingual
+#| eval: false
+bertscore("to what extent do you agree", "in hoeverre bent u het eens")[["f1"]]
+#> [1] 0.921
+cosine_similarity("to what extent do you agree", "in hoeverre bent u het eens",
+                  pooling = "cls")
+#> [1] 0.895
+```
+
+Both score the cross-lingual pair almost as high as an English paraphrase.
+
+### All metrics together
+
+Setting `bert = TRUE` adds the two embedding columns, `bertscore_f1` and
+`cosine_emb`, to `compare_strings()`; pass `pooling = "cls"` for `bge-m3`. The
+full table makes the difference between surface and semantic similarity visible.
 
 ```{r}
 #| label: compare-bert
 #| eval: false
-compare_strings(variants, reference, bert = TRUE)
+compare_strings(variants, reference, bert = TRUE, pooling = "cls")
 ```
 
-| label          | levenshtein | jaccard | cosine | bleu | bertscore_f1 |
-|:---------------|------------:|--------:|-------:|-----:|-------------:|
-| Near-identical |        0.98 |    1.00 |   1.00 | 0.88 |         0.92 |
-| Paraphrase     |        0.49 |    0.86 |   0.94 | 0.26 |         0.78 |
-| Different      |        0.35 |    0.67 |   0.84 | 0.00 |         0.23 |
-| Unrelated      |        0.25 |    0.82 |   0.92 | 0.00 |         0.17 |
+| label          | levenshtein | jaccard | cosine | bleu | bertscore_f1 | cosine_emb |
+|:---------------|------------:|--------:|-------:|-----:|-------------:|-----------:|
+| Near-identical |        0.98 |    1.00 |   1.00 | 0.88 |         0.99 |       0.97 |
+| Paraphrase     |        0.49 |    0.86 |   0.94 | 0.26 |         0.96 |       0.93 |
+| Different      |        0.35 |    0.67 |   0.84 | 0.00 |         0.78 |       0.65 |
+| Unrelated      |        0.25 |    0.82 |   0.92 | 0.00 |         0.71 |       0.49 |
 
-The paraphrase keeps a high BERTScore (0.78) even though its BLEU is low
-(0.26), because it preserves meaning while changing words. The unrelated
-question drops to 0.17 on BERTScore, where cosine left it at a misleading
-0.92.
+Both embedding metrics keep the paraphrase high (0.96 and 0.93) even though its
+BLEU is low (0.26), because it preserves meaning while changing words. The
+different and unrelated questions, which character cosine left at a misleading
+0.84 and 0.92, separate much better on `cosine_emb` (0.65 and 0.49) than on the
+anisotropic `bertscore_f1` (0.78 and 0.71) -- though the baseline rescaling below
+recovers that separation for BERTScore too.
 
 ### Calibrating scores with a baseline
 
@@ -268,11 +327,17 @@ bertscore("what is your date of birth", "to what extent do you agree")[["f1"]]
 #> [1] 0.714
 
 # Rescaled against the baseline: the gap opens up.
-bertscore("how much do you agree", "to what extent do you agree",
-          baseline = baseline)[["f1"]]
+bertscore(
+  "how much do you agree",
+  "to what extent do you agree",
+  baseline = baseline
+)[["f1"]]
 #> [1] 0.842
-bertscore("what is your date of birth", "to what extent do you agree",
-          baseline = baseline)[["f1"]]
+bertscore(
+  "what is your date of birth",
+  "to what extent do you agree",
+  baseline = baseline
+)[["f1"]]
 #> [1] 0.231
 ```
 
@@ -298,6 +363,14 @@ as a difference.
   the three; Jaccard adds little beside it.
 - Use **BLEU** when word order matters, such as translation evaluation, and
   you want a candidate penalised for rearranging or dropping words.
-- Use **BERTScore** when paraphrasing is expected and valid responses may use
-  different words for the same meaning. It is the only metric here that scores
-  such responses correctly, at the cost of running a local embedding server.
+- Use the **embedding metrics** when paraphrasing is expected and valid
+  responses may use different words, or even different languages, for the same
+  meaning. They are the only metrics here that score such responses correctly,
+  at the cost of running a local embedding server. `cosine_similarity()` is
+  faster and gives one number per pair; `bertscore()` is finer-grained, matching
+  token by token, and reports precision and recall separately.
+
+Two practical notes for the embedding metrics: match the `pooling` argument to
+your model (`"cls"` for `bge-m3`, `"mean"` for `all-MiniLM` and the E5 family),
+and rescale `bertscore()` against a baseline when you need thresholds that are
+comparable across models.
