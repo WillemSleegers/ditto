@@ -37,9 +37,15 @@
 #'   (`TRUE`) or return immediately (`FALSE`).
 #' @param timeout Seconds to wait for the server to become ready when
 #'   `wait = TRUE`.
+#' `find_llama_server()` looks for the executable without starting it, checking
+#' the `ditto.llama_server` option and `DITTO_LLAMA_SERVER` environment variable
+#' first, then the `PATH`, then a few common install directories. It only reads
+#' the filesystem and never launches anything.
+#'
 #' @return `start_llama_server()` invisibly returns the [processx::process]
 #'   handle; `stop_llama_server()` returns `NULL` invisibly;
-#'   `llama_server_running()` returns a single logical.
+#'   `llama_server_running()` returns a single logical; `find_llama_server()`
+#'   returns the path to the executable as a string, or `NULL` if none is found.
 #' @seealso [bertscore()] and [token_embeddings()], which query the server.
 #' @name llama_server
 #' @examples
@@ -149,6 +155,58 @@ llama_server_running <- function(host = "http://localhost:8080") {
     error = function(e) NULL
   )
   !is.null(resp) && httr2::resp_status(resp) == 200
+}
+
+#' @rdname llama_server
+#' @export
+find_llama_server <- function() {
+  # 1. Explicitly configured location takes priority.
+  configured <- getOption("ditto.llama_server") %||%
+    nzchar_or_null(Sys.getenv("DITTO_LLAMA_SERVER"))
+  if (!is.null(configured) && file.exists(configured)) {
+    return(configured)
+  }
+
+  exe_name <- if (.Platform$OS.type == "windows") {
+    "llama-server.exe"
+  } else {
+    "llama-server"
+  }
+
+  # 2. On the PATH. Sys.which handles the executable extension on Windows.
+  on_path <- Sys.which("llama-server")
+  if (nzchar(on_path)) {
+    return(unname(on_path))
+  }
+
+  # 3. A few common install locations.
+  candidates <- file.path(llama_server_dirs(), exe_name)
+  hit <- candidates[file.exists(candidates)]
+  if (length(hit) > 0) {
+    return(hit[[1]])
+  }
+
+  NULL
+}
+
+# Directories commonly holding a llama-server binary, by platform.
+llama_server_dirs <- function() {
+  home <- path.expand("~")
+  dirs <- c(
+    file.path(home, "tools", "llama.cpp"),
+    file.path(home, "llama.cpp"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/usr/bin"
+  )
+  if (.Platform$OS.type == "windows") {
+    dirs <- c(
+      dirs,
+      file.path(Sys.getenv("LOCALAPPDATA"), "llama.cpp"),
+      "C:/Program Files/llama.cpp"
+    )
+  }
+  dirs[nzchar(dirs)]
 }
 
 # Treat an empty environment variable as unset.

@@ -5,6 +5,7 @@
 \alias{start_llama_server}
 \alias{stop_llama_server}
 \alias{llama_server_running}
+\alias{find_llama_server}
 \title{Manage a local llama.cpp embedding server}
 \usage{
 start_llama_server(
@@ -20,6 +21,8 @@ start_llama_server(
 stop_llama_server()
 
 llama_server_running(host = "http://localhost:8080")
+
+find_llama_server()
 }
 \arguments{
 \item{model}{Path to a \code{.gguf} embedding model. Prefer a model without a
@@ -40,12 +43,17 @@ token-level embeddings.}
 (\code{TRUE}) or return immediately (\code{FALSE}).}
 
 \item{timeout}{Seconds to wait for the server to become ready when
-\code{wait = TRUE}.}
+\code{wait = TRUE}.
+\code{find_llama_server()} looks for the executable without starting it, checking
+the \code{ditto.llama_server} option and \code{DITTO_LLAMA_SERVER} environment variable
+first, then the \code{PATH}, then a few common install directories. It only reads
+the filesystem and never launches anything.}
 }
 \value{
 \code{start_llama_server()} invisibly returns the \link[processx:process]{processx::process}
 handle; \code{stop_llama_server()} returns \code{NULL} invisibly;
-\code{llama_server_running()} returns a single logical.
+\code{llama_server_running()} returns a single logical; \code{find_llama_server()}
+returns the path to the executable as a string, or \code{NULL} if none is found.
 }
 \description{
 \code{\link[=bertscore]{bertscore()}} and \code{\link[=token_embeddings]{token_embeddings()}} need a running \code{llama.cpp} server
