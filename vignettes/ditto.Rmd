@@ -228,6 +228,65 @@ The paraphrase keeps a high BERTScore (0.78) even though its BLEU is low
 question drops to 0.17 on BERTScore, where cosine left it at a misleading
 0.92.
 
+### Calibrating scores with a baseline
+
+Raw BERTScore values are not comparable across models, and some models compress
+the range. With `all-MiniLM-L6-v2` an unrelated pair scores around 0.11, but
+with a model whose token embeddings are anisotropic, such as the multilingual
+`bge-m3`, *unrelated* text already scores around 0.71. The ordering is still
+correct -- paraphrases score higher than unrelated pairs -- but the usable range
+is squeezed into a narrow band near the top, and a fixed threshold means
+something different for each model.
+
+The original BERTScore addresses this by rescaling against a baseline: the score
+the model assigns to unrelated text. `bertscore_baseline()` estimates it by
+averaging over many random, and therefore unrelated, pairs drawn from a corpus.
+By default it uses the English rows of `example_sentences`, a bundled set of
+distinct-meaning sentences; pass your own `texts` for a domain- or
+language-specific estimate.
+
+```{r}
+#| label: baseline
+#| eval: false
+baseline <- bertscore_baseline(seed = 1)
+baseline
+#>  precision     recall         f1
+#>      0.628      0.629      0.628
+```
+
+Passing this `baseline` to `bertscore()` (or `compare_strings()`) rescales each
+score as `(x - baseline) / (1 - baseline)`, mapping the unrelated-text floor to
+0 while leaving a perfect match at 1.
+
+```{r}
+#| label: baseline-rescale
+#| eval: false
+# Raw scores from bge-m3: paraphrase and unrelated sit close together.
+bertscore("how much do you agree", "to what extent do you agree")[["f1"]]
+#> [1] 0.941
+bertscore("what is your date of birth", "to what extent do you agree")[["f1"]]
+#> [1] 0.714
+
+# Rescaled against the baseline: the gap opens up.
+bertscore("how much do you agree", "to what extent do you agree",
+          baseline = baseline)[["f1"]]
+#> [1] 0.842
+bertscore("what is your date of birth", "to what extent do you agree",
+          baseline = baseline)[["f1"]]
+#> [1] 0.231
+```
+
+The baseline is specific to the model and the language, so estimate it from text
+that matches your use. For a multilingual model, build a baseline for each
+language from the relevant rows of `example_sentences` (or your own corpus):
+
+```{r}
+#| label: baseline-language
+#| eval: false
+dutch <- example_sentences$text[example_sentences$language == "nl"]
+nl_baseline <- bertscore_baseline(dutch, seed = 1)
+```
+
 ## Choosing a metric
 
 The metrics answer different questions, so the choice follows from what counts
