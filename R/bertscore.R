@@ -35,19 +35,7 @@ token_embeddings <- function(text,
                              host = "http://localhost:8080",
                              prefix = "",
                              drop_special = TRUE) {
-  resp <- httr2::request(host) |>
-    httr2::req_url_path("/embeddings") |>
-    httr2::req_body_json(list(content = paste0(prefix, text))) |>
-    httr2::req_perform()
-
-  parsed <- httr2::resp_body_json(resp, simplifyVector = FALSE)
-
-  # NOTE: the exact response shape depends on the llama.cpp version. With
-  # `--pooling none` the native /embeddings endpoint returns the per-token
-  # vectors under `embedding`. This extracts a list of numeric vectors and
-  # stacks them into a matrix; adjust here if your server's shape differs.
-  rows <- parsed[[1]]$embedding
-  mat <- do.call(rbind, lapply(rows, function(v) as.numeric(unlist(v))))
+  mat <- embed_raw(paste0(prefix, text), host = host)
 
   if (drop_special && nrow(mat) > 2) {
     mat <- mat[-c(1, nrow(mat)), , drop = FALSE]
@@ -61,6 +49,21 @@ token_embeddings <- function(text,
     }
   }
   mat
+}
+
+# Raw per-token embedding matrix for `text`, with no trimming. The exact
+# response shape depends on the llama.cpp version. With `--pooling none` the
+# native /embeddings endpoint returns the per-token vectors under `embedding`;
+# this stacks them into a matrix. Adjust here if your server's shape differs.
+embed_raw <- function(text, host = "http://localhost:8080") {
+  resp <- httr2::request(host) |>
+    httr2::req_url_path("/embeddings") |>
+    httr2::req_body_json(list(content = text)) |>
+    httr2::req_perform()
+
+  parsed <- httr2::resp_body_json(resp, simplifyVector = FALSE)
+  rows <- parsed[[1]]$embedding
+  do.call(rbind, lapply(rows, function(v) as.numeric(unlist(v))))
 }
 
 # Number of tokens a string occupies, excluding special tokens, via the

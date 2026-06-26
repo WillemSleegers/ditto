@@ -10,35 +10,44 @@ compare_strings(
   bert = FALSE,
   host = "http://localhost:8080",
   prefix = "",
-  baseline = NULL
+  baseline = NULL,
+  pooling = c("mean", "cls")
 )
 }
 \arguments{
 \item{candidate, reference}{Character vectors of equal length.}
 
-\item{bert}{Whether to include the BERTScore F1 column. Default \code{FALSE}.}
+\item{bert}{Whether to include the embedding-based columns (\code{bertscore_f1}
+and \code{cosine_emb}). Default \code{FALSE}.}
 
 \item{host}{Base URL of the llama.cpp server, used when \code{bert = TRUE}.}
 
-\item{prefix}{Optional task prefix passed to \code{\link[=bertscore]{bertscore()}} for models that
-require one (e.g. \code{"query: "}), used when \code{bert = TRUE}. Default \code{""}.}
+\item{prefix}{Optional task prefix passed to \code{\link[=bertscore]{bertscore()}} and
+\code{\link[=cosine_similarity]{cosine_similarity()}} for models that require one (e.g. \code{"query: "}), used
+when \code{bert = TRUE}. Default \code{""}.}
 
 \item{baseline}{Optional BERTScore baseline passed to \code{\link[=bertscore]{bertscore()}} for
 rescaling, used when \code{bert = TRUE}; see \code{\link[=bertscore_baseline]{bertscore_baseline()}}. Default
 \code{NULL}.}
+
+\item{pooling}{Token pooling for the \code{cosine_emb} column, passed to
+\code{\link[=cosine_similarity]{cosine_similarity()}}; \code{"mean"} (default) or \code{"cls"}. Used when
+\code{bert = TRUE}.}
 }
 \value{
 A \link[tibble:tibble]{tibble} with one row per input pair, containing
 the candidate and reference text and a column for each metric:
-\code{levenshtein}, \code{jaccard}, \code{cosine}, \code{bleu}, and, when \code{bert = TRUE},
-\code{bertscore_f1}.
+\code{levenshtein}, \code{jaccard}, \code{cosine} (character-frequency), \code{bleu}, and, when
+\code{bert = TRUE}, \code{bertscore_f1} and \code{cosine_emb} (whole-string embedding
+cosine).
 }
 \description{
 Computes several similarity metrics for aligned candidate and reference
 strings and returns them in a single table. Edit-distance, n-gram, and
 character-frequency metrics come from \code{\link[stringdist:stringsim]{stringdist::stringsim()}}; BLEU is
-computed by \code{\link[=bleu]{bleu()}}. The embedding-based BERTScore F1 is optional because
-it requires a running \code{llama.cpp} server.
+computed by \code{\link[=bleu]{bleu()}}. The embedding-based metrics (BERTScore F1 and
+whole-string cosine) are optional because they require a running
+\code{llama.cpp} server.
 }
 \details{
 Inputs are compared as given; clean them first with \code{\link[=clean]{clean()}} if surface
@@ -52,6 +61,6 @@ compare_strings(
 )
 }
 \seealso{
-\code{\link[=bleu]{bleu()}} and \code{\link[=bertscore]{bertscore()}} for the individual metrics, and
-\code{\link[=clean]{clean()}} to normalise text before comparison.
+\code{\link[=bleu]{bleu()}}, \code{\link[=bertscore]{bertscore()}}, and \code{\link[=cosine_similarity]{cosine_similarity()}} for the
+individual metrics, and \code{\link[=clean]{clean()}} to normalise text before comparison.
 }

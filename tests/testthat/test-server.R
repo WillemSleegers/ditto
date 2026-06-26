@@ -79,4 +79,22 @@ test_that("a real server can be started, queried, and stopped", {
     host = host, baseline = baseline
   )
   expect_true(rescaled[["f1"]] < score[["f1"]])
+
+  # Whole-string cosine: in range, both poolings work, and a paraphrase
+  # scores above an unrelated pair.
+  for (pool in c("mean", "cls")) {
+    para <- cosine_similarity("how much do you agree",
+                              "to what extent do you agree",
+                              host = host, pooling = pool)
+    unrel <- cosine_similarity("what is your date of birth",
+                               "to what extent do you agree",
+                               host = host, pooling = pool)
+    expect_true(para >= -1 && para <= 1)
+    expect_true(para > unrel)
+  }
+
+  # compare_strings exposes the cosine_emb column when bert = TRUE.
+  cmp <- compare_strings("how much do you agree", "to what extent do you agree",
+                         bert = TRUE, host = host, pooling = "cls")
+  expect_true("cosine_emb" %in% names(cmp))
 })
