@@ -8,7 +8,8 @@ compare_strings(
   candidate,
   reference,
   bert = FALSE,
-  host = "http://localhost:8080"
+  host = "http://localhost:8080",
+  prefix = ""
 )
 }
 \arguments{
@@ -17,6 +18,9 @@ compare_strings(
 \item{bert}{Whether to include the BERTScore F1 column. Default \code{FALSE}.}
 
 \item{host}{Base URL of the llama.cpp server, used when \code{bert = TRUE}.}
+
+\item{prefix}{Optional task prefix passed to \code{\link[=bertscore]{bertscore()}} for models that
+require one (e.g. \code{"query: "}), used when \code{bert = TRUE}. Default \code{""}.}
 }
 \value{
 A \link[tibble:tibble]{tibble} with one row per input pair, containing

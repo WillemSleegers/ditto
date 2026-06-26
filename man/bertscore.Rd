@@ -4,7 +4,7 @@
 \alias{bertscore}
 \title{Compute a BERTScore}
 \usage{
-bertscore(candidate, reference, host = "http://localhost:8080")
+bertscore(candidate, reference, host = "http://localhost:8080", prefix = "")
 }
 \arguments{
 \item{candidate}{A single candidate string.}
@@ -12,6 +12,10 @@ bertscore(candidate, reference, host = "http://localhost:8080")
 \item{reference}{A single reference string.}
 
 \item{host}{Base URL of the llama.cpp server.}
+
+\item{prefix}{Optional task prefix required by some models (e.g. \code{"query: "}
+for the E5 family). Applied to both strings and stripped before matching;
+see \code{\link[=token_embeddings]{token_embeddings()}}. Default \code{""}.}
 }
 \value{
 A named numeric vector with \code{precision}, \code{recall}, and \code{f1}.

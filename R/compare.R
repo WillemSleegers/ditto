@@ -12,6 +12,8 @@
 #' @param candidate,reference Character vectors of equal length.
 #' @param bert Whether to include the BERTScore F1 column. Default `FALSE`.
 #' @param host Base URL of the llama.cpp server, used when `bert = TRUE`.
+#' @param prefix Optional task prefix passed to [bertscore()] for models that
+#'   require one (e.g. `"query: "`), used when `bert = TRUE`. Default `""`.
 #' @return A [tibble][tibble::tibble] with one row per input pair, containing
 #'   the candidate and reference text and a column for each metric:
 #'   `levenshtein`, `jaccard`, `cosine`, `bleu`, and, when `bert = TRUE`,
@@ -26,7 +28,7 @@
 #'     "to what extent do you agree with the statement")
 #' )
 compare_strings <- function(candidate, reference, bert = FALSE,
-                            host = "http://localhost:8080") {
+                            host = "http://localhost:8080", prefix = "") {
   out <- tibble::tibble(
     candidate = candidate,
     reference = reference,
@@ -38,7 +40,7 @@ compare_strings <- function(candidate, reference, bert = FALSE,
 
   if (bert) {
     out$bertscore_f1 <- purrr::map2_dbl(candidate, reference, function(a, b) {
-      bertscore(a, b, host = host)[["f1"]]
+      bertscore(a, b, host = host, prefix = prefix)[["f1"]]
     })
   }
 

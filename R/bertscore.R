@@ -11,12 +11,20 @@
 #' @details
 #' Ollama and LM Studio expose only pooled, OpenAI-style embedding endpoints
 #' that return a single vector per string, so they cannot be used here. Start
-#' `llama-server` with both `--embedding` and `--pooling none`. Prefer an
-#' embedding model without a required task prefix, since a prefix such as
-#' `search_document:` would add tokens that are matched along with the text.
+#' `llama-server` with both `--embedding` and `--pooling none`.
+#'
+#' Some embedding models require a task prefix, such as `"query: "` for the
+#' E5 family or `"search_document: "` for nomic. Pass it as `prefix`: the
+#' prefix is prepended before the text is embedded, and its tokens are then
+#' counted via the server's `/tokenize` endpoint and dropped, so they do not
+#' enter the [bertscore()] matching. With `prefix = ""` (the default) no prefix
+#' is added, which suits models such as BGE that do not need one.
 #'
 #' @param text A single string.
 #' @param host Base URL of the llama.cpp server.
+#' @param prefix Optional task prefix required by some models (e.g. `"query: "`).
+#'   Prepended before embedding and stripped from the returned rows. Default
+#'   `""` (no prefix).
 #' @param drop_special Whether to drop the first and last token rows, which
 #'   correspond to the model's special tokens. Default `TRUE`.
 #' @return A numeric matrix with one row per token and one column per
@@ -25,10 +33,11 @@
 #' @export
 token_embeddings <- function(text,
                              host = "http://localhost:8080",
+                             prefix = "",
                              drop_special = TRUE) {
   resp <- httr2::request(host) |>
     httr2::req_url_path("/embeddings") |>
-    httr2::req_body_json(list(content = text)) |>
+    httr2::req_body_json(list(content = paste0(prefix, text))) |>
     httr2::req_perform()
 
   parsed <- httr2::resp_body_json(resp, simplifyVector = FALSE)
@@ -43,7 +52,25 @@ token_embeddings <- function(text,
   if (drop_special && nrow(mat) > 2) {
     mat <- mat[-c(1, nrow(mat)), , drop = FALSE]
   }
+
+  # Drop the prefix's own tokens, which now sit at the start of the matrix.
+  if (nzchar(prefix)) {
+    n_prefix <- count_tokens(prefix, host = host)
+    if (n_prefix > 0 && nrow(mat) > n_prefix) {
+      mat <- mat[-seq_len(n_prefix), , drop = FALSE]
+    }
+  }
   mat
+}
+
+# Number of tokens a string occupies, excluding special tokens, via the
+# server's /tokenize endpoint.
+count_tokens <- function(text, host = "http://localhost:8080") {
+  resp <- httr2::request(host) |>
+    httr2::req_url_path("/tokenize") |>
+    httr2::req_body_json(list(content = text, add_special = FALSE)) |>
+    httr2::req_perform()
+  length(httr2::resp_body_json(resp, simplifyVector = FALSE)$tokens)
 }
 
 #' Compute a BERTScore
@@ -67,6 +94,9 @@ token_embeddings <- function(text,
 #' @param candidate A single candidate string.
 #' @param reference A single reference string.
 #' @param host Base URL of the llama.cpp server.
+#' @param prefix Optional task prefix required by some models (e.g. `"query: "`
+#'   for the E5 family). Applied to both strings and stripped before matching;
+#'   see [token_embeddings()]. Default `""`.
 #' @return A named numeric vector with `precision`, `recall`, and `f1`.
 #' @seealso [token_embeddings()] for the embeddings this uses, and
 #'   [compare_strings()] to report it next to the surface metrics.
@@ -80,9 +110,10 @@ token_embeddings <- function(text,
 #' \dontrun{
 #' bertscore("how much do you agree", "to what extent do you agree")
 #' }
-bertscore <- function(candidate, reference, host = "http://localhost:8080") {
-  cand <- token_embeddings(candidate, host = host)
-  ref <- token_embeddings(reference, host = host)
+bertscore <- function(candidate, reference, host = "http://localhost:8080",
+                      prefix = "") {
+  cand <- token_embeddings(candidate, host = host, prefix = prefix)
+  ref <- token_embeddings(reference, host = host, prefix = prefix)
 
   cand_n <- cand / sqrt(rowSums(cand^2))
   ref_n <- ref / sqrt(rowSums(ref^2))

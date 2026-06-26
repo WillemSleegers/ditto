@@ -4,12 +4,21 @@
 \alias{token_embeddings}
 \title{Token-level embeddings from a local llama.cpp server}
 \usage{
-token_embeddings(text, host = "http://localhost:8080", drop_special = TRUE)
+token_embeddings(
+  text,
+  host = "http://localhost:8080",
+  prefix = "",
+  drop_special = TRUE
+)
 }
 \arguments{
 \item{text}{A single string.}
 
 \item{host}{Base URL of the llama.cpp server.}
+
+\item{prefix}{Optional task prefix required by some models (e.g. \code{"query: "}).
+Prepended before embedding and stripped from the returned rows. Default
+\code{""} (no prefix).}
 
 \item{drop_special}{Whether to drop the first and last token rows, which
 correspond to the model's special tokens. Default \code{TRUE}.}
@@ -30,9 +39,14 @@ are dropped by default, matching the original BERTScore definition.
 
 Ollama and LM Studio expose only pooled, OpenAI-style embedding endpoints
 that return a single vector per string, so they cannot be used here. Start
-\code{llama-server} with both \code{--embedding} and \verb{--pooling none}. Prefer an
-embedding model without a required task prefix, since a prefix such as
-\verb{search_document:} would add tokens that are matched along with the text.
+\code{llama-server} with both \code{--embedding} and \verb{--pooling none}.
+
+Some embedding models require a task prefix, such as \code{"query: "} for the
+E5 family or \code{"search_document: "} for nomic. Pass it as \code{prefix}: the
+prefix is prepended before the text is embedded, and its tokens are then
+counted via the server's \verb{/tokenize} endpoint and dropped, so they do not
+enter the \code{\link[=bertscore]{bertscore()}} matching. With \code{prefix = ""} (the default) no prefix
+is added, which suits models such as BGE that do not need one.
 }
 \seealso{
 \code{\link[=bertscore]{bertscore()}}, which builds on these embeddings.
