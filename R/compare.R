@@ -47,16 +47,16 @@ compare_strings <- function(candidate, reference, bert = FALSE,
     levenshtein = stringdist::stringsim(candidate, reference, method = "lv"),
     jaccard = stringdist::stringsim(candidate, reference, method = "jaccard"),
     cosine = stringdist::stringsim(candidate, reference, method = "cosine"),
-    bleu = purrr::map2_dbl(candidate, reference, bleu)
+    bleu = mapply(bleu, candidate, reference, USE.NAMES = FALSE)
   )
 
   if (bert) {
-    out$bertscore_f1 <- purrr::map2_dbl(candidate, reference, function(a, b) {
+    out$bertscore_f1 <- mapply(function(a, b) {
       bertscore(a, b, host = host, prefix = prefix, baseline = baseline)[["f1"]]
-    })
-    out$cosine_emb <- purrr::map2_dbl(candidate, reference, function(a, b) {
+    }, candidate, reference, USE.NAMES = FALSE)
+    out$cosine_emb <- mapply(function(a, b) {
       cosine_similarity(a, b, host = host, prefix = prefix, pooling = pooling)
-    })
+    }, candidate, reference, USE.NAMES = FALSE)
   }
 
   out

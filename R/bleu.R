@@ -35,9 +35,9 @@ bleu <- function(candidate, reference, max_n = 4) {
   cand_tokens <- stringr::str_split(candidate, "\\s+")[[1]]
   ref_tokens <- stringr::str_split(reference, "\\s+")[[1]]
   max_n <- min(max_n, length(cand_tokens), length(ref_tokens))
-  precisions <- purrr::map_dbl(seq_len(max_n), function(n) {
+  precisions <- vapply(seq_len(max_n), function(n) {
     clipped_precision(cand_tokens, ref_tokens, n)
-  })
+  }, numeric(1))
   if (any(precisions == 0)) {
     return(0)
   }
@@ -60,9 +60,9 @@ get_ngrams <- function(tokens, n) {
   if (length(tokens) < n) {
     return(character(0))
   }
-  purrr::map_chr(seq_len(length(tokens) - n + 1), function(i) {
+  vapply(seq_len(length(tokens) - n + 1), function(i) {
     paste(tokens[i:(i + n - 1)], collapse = " ")
-  })
+  }, character(1))
 }
 
 # Fraction of candidate n-grams that appear in the reference, with each
@@ -73,8 +73,8 @@ clipped_precision <- function(cand_tokens, ref_tokens, n) {
   if (length(cand_ngrams) == 0) {
     return(0)
   }
-  sum(purrr::map_dbl(unique(cand_ngrams), function(ng) {
+  sum(vapply(unique(cand_ngrams), function(ng) {
     min(sum(cand_ngrams == ng), sum(ref_ngrams == ng))
-  })) /
+  }, numeric(1))) /
     length(cand_ngrams)
 }
