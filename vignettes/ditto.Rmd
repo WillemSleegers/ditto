@@ -25,14 +25,15 @@ Typical uses are checking whether a survey question has been reworded across
 waves, comparing a translation against its source, and grouping near-duplicate
 free-text responses.
 
-The package collects metrics that differ in what they treat as a meaningful
-difference. The edit-distance, Jaccard, and cosine metrics come from
-[`stringdist`](https://github.com/markvanderloo/stringdist) and compare
-characters; `bleu()` compares word sequences; and the embedding metrics,
-`bertscore()` and `cosine_similarity()`, compare meaning through contextual
-embeddings. `compare_strings()` runs the character- and word-level metrics
-together, and the embedding metrics too when an embedding server is available,
-returning them in one table.
+The metrics differ in what counts as a difference. Three character-level
+metrics -- edit distance, Jaccard, and cosine -- come from
+[`stringdist`](https://github.com/markvanderloo/stringdist) and are available
+only through `compare_strings()`. `bleu()` compares word sequences, and the
+embedding metrics `bertscore()` and `cosine_similarity()` compare meaning
+through contextual embeddings; these three can also be called on their own.
+`compare_strings()` runs the character- and word-level metrics together, and
+the embedding metrics too when an embedding server is available, returning them
+in one table.
 
 ## Cleaning text
 
@@ -75,7 +76,7 @@ frequencies). The fourth is BLEU, which is described below.
 ```{r}
 #| label: compare
 result <- compare_strings(variants, reference)
-cbind(label = labels, round(result[, -(1:2)], 2))
+knitr::kable(cbind(label = labels, round(result[, -(1:2)], 2)))
 ```
 
 The near-identical variant scores near 1 on every metric. The other three
@@ -135,7 +136,9 @@ token-level embeddings these metrics need. A `llama.cpp` server started with
 1. Download the prebuilt `llama.cpp` binaries for your platform from the
    [releases page](https://github.com/ggml-org/llama.cpp/releases) (no
    compilation required).
-2. Download an embedding model in GGUF format. This vignette uses
+2. Download an **embedding model** in GGUF format -- one trained so its output is
+   a semantic vector, which is what these metrics compare (a plain generative or
+   masked-language model is not built for this). This vignette uses
    [`bge-m3`](https://huggingface.co/BAAI/bge-m3), a multilingual model that
    needs no task prefix; `all-MiniLM-L6-v2` is a smaller, English-only
    alternative. Some models, such as the E5 family, require a task prefix like
@@ -191,13 +194,13 @@ against `bge-m3`.
 #| label: bertscore
 #| eval: false
 bertscore("how much do you agree", "to what extent do you agree")
-#>  precision     recall         f1
-#>      0.944      0.938      0.941
-
 bertscore("what is your date of birth", "to what extent do you agree")
-#>  precision     recall         f1
-#>      0.709      0.720      0.714
 ```
+
+| pair       | precision | recall |    f1 |
+|:-----------|----------:|-------:|------:|
+| paraphrase |     0.944 |  0.938 | 0.941 |
+| unrelated  |     0.709 |  0.720 | 0.714 |
 
 The paraphrase scores 0.94 and the unrelated question 0.71. Both are high:
 `bge-m3` places even unrelated text at a substantial similarity, so the raw
@@ -211,8 +214,11 @@ model's special tokens, and one column per embedding dimension.
 #| label: token-embeddings
 #| eval: false
 dim(token_embeddings("to what extent do you agree"))
-#> [1]    6 1024
 ```
+
+| rows (tokens) | columns (dimensions) |
+|--------------:|---------------------:|
+|             6 |                 1024 |
 
 ### Whole-string cosine
 
@@ -231,11 +237,14 @@ Use the pooling your model was trained with.
 # bge-m3 is a CLS-pooling model.
 cosine_similarity("how much do you agree", "to what extent do you agree",
                   pooling = "cls")
-#> [1] 0.892
 cosine_similarity("what is your date of birth", "to what extent do you agree",
                   pooling = "cls")
-#> [1] 0.474
 ```
+
+| pair       | cosine similarity |
+|:-----------|------------------:|
+| paraphrase |             0.892 |
+| unrelated  |             0.474 |
 
 With the matching CLS pooling the unrelated pair drops to 0.47 while the
 paraphrase stays at 0.89, a wider gap than mean pooling gives (0.72 versus 0.95),
@@ -253,11 +262,14 @@ all. Comparing the English reference with its Dutch translation:
 #| label: multilingual
 #| eval: false
 bertscore("to what extent do you agree", "in hoeverre bent u het eens")[["f1"]]
-#> [1] 0.921
 cosine_similarity("to what extent do you agree", "in hoeverre bent u het eens",
                   pooling = "cls")
-#> [1] 0.895
 ```
+
+| metric            | score |
+|:------------------|------:|
+| BERTScore F1      | 0.921 |
+| cosine similarity | 0.895 |
 
 Both score the cross-lingual pair almost as high as an English paraphrase.
 
@@ -309,9 +321,11 @@ language-specific estimate.
 #| eval: false
 baseline <- bertscore_baseline(seed = 1)
 baseline
-#>  precision     recall         f1
-#>      0.628      0.629      0.628
 ```
+
+| precision | recall |    f1 |
+|----------:|-------:|------:|
+|     0.628 |  0.629 | 0.628 |
 
 Passing this `baseline` to `bertscore()` (or `compare_strings()`) rescales each
 score as `(x - baseline) / (1 - baseline)`, mapping the unrelated-text floor to
@@ -322,9 +336,7 @@ score as `(x - baseline) / (1 - baseline)`, mapping the unrelated-text floor to
 #| eval: false
 # Raw scores from bge-m3: paraphrase and unrelated sit close together.
 bertscore("how much do you agree", "to what extent do you agree")[["f1"]]
-#> [1] 0.941
 bertscore("what is your date of birth", "to what extent do you agree")[["f1"]]
-#> [1] 0.714
 
 # Rescaled against the baseline: the gap opens up.
 bertscore(
@@ -332,14 +344,17 @@ bertscore(
   "to what extent do you agree",
   baseline = baseline
 )[["f1"]]
-#> [1] 0.842
 bertscore(
   "what is your date of birth",
   "to what extent do you agree",
   baseline = baseline
 )[["f1"]]
-#> [1] 0.231
 ```
+
+| pair       | raw f1 | rescaled f1 |
+|:-----------|-------:|------------:|
+| paraphrase |  0.941 |       0.842 |
+| unrelated  |  0.714 |       0.231 |
 
 The baseline is specific to the model and the language, so estimate it from text
 that matches your use. For a multilingual model, `bertscore_baselines()` returns

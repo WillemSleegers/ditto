@@ -7,18 +7,6 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r}
-#| label: knitr-setup
-#| include: false
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-```
-
-```{r}
-#| label: setup
-#| message: false
-library(ditto)
-```
-
 `ditto`'s `bertscore()` is a from-scratch reimplementation of the metric
 introduced by Zhang et al. (2020). The authors also released a reference Python
 package, [`bert-score`](https://github.com/Tiiiger/bert_score). This vignette
@@ -26,55 +14,38 @@ checks that `ditto` agrees with that reference: given the *same* model and the
 *same* settings, the two should return the same precision, recall, and F1 for
 every pair, up to small numerical differences.
 
-None of the code below runs when the vignette is built, because both sides need
-a model loaded -- `ditto` through a local `llama.cpp` server and `bert-score`
-through Python. The figures shown are from one such run against `bge-m3`; rerun
-the steps to regenerate them.
-
 ## What has to match
 
-`bertscore()` and `bert-score` only agree if they are computing the same thing.
-Five settings have to line up; the third is the one most easily missed.
+The two implementations agree only when they compute the same thing, which holds
+under five conditions. The run below satisfies all five:
 
-1. **The same model.** Serve the model `ditto` reads through `llama.cpp` and
-   pass the *same* model to `bert-score` via `model_type`. This vignette uses
-   [`bge-m3`](https://huggingface.co/BAAI/bge-m3) on both sides; any model both
-   tools can load works equally well (e.g. `roberta-large`, the `bert-score`
-   default).
+1. **The same model** on both sides -- `bge-m3` here, served to `ditto` through
+   `llama.cpp` and passed to `bert-score` via `model_type`. Any model both tools
+   can load works (e.g. `roberta-large`, the `bert-score` default).
 
-2. **The same layer.** `bert-score` does not use the final layer by default --
-   it reads a tuned intermediate layer (`roberta-large` defaults to layer 17 of
-   24). A `llama.cpp` `/embeddings` response returns the **final** layer. So set
-   `bert-score`'s `num_layers` to the model's last layer (24 for the
-   large XLM-R that `bge-m3` is built on) so both read the same layer. Skip this
-   and the scores will differ for a reason that has nothing to do with `ditto`.
+2. **The same layer.** A transformer emits a separate embedding for each token at
+   every one of its layers, and BERTScore must pick one layer to score from. A
+   `llama.cpp` `/embeddings` response returns the final layer, but `bert-score`
+   defaults to a tuned intermediate one (layer 17 of 24 for `roberta-large`). That
+   default is tuned for masked-language-model encoders, whose top layers drift
+   toward the pretraining objective and lose general meaning; an intermediate
+   layer correlates better with human judgment. `bge-m3` is a dedicated embedding
+   model, though: it is trained so that its *final* layer is the semantic
+   representation, so reading the last layer is the right choice rather than a
+   compromise (and `bert-score` has no tuned layer for it anyway). The run sets
+   `num_layers` to the model's last layer (24 for the large XLM-R behind `bge-m3`)
+   so both read the final layer.
 
-3. **No IDF weighting.** `bertscore()` is unweighted, so call `bert-score` with
+3. **No IDF weighting** -- `bertscore()` is unweighted, matched by `bert-score`'s
    `idf=False` (its default).
 
-4. **No baseline rescaling.** `bertscore()` returns raw scores unless you pass a
-   `baseline`, so call `bert-score` with `rescale_with_baseline=False` (its
-   default), and pass no `baseline` here.
+4. **No baseline rescaling** -- `bertscore()` returns raw scores absent a
+   `baseline`, matched by `rescale_with_baseline=False` (its default) and no
+   `baseline` on the `ditto` side.
 
-5. **Identical input strings.** Both tools embed the raw string; neither
-   lowercases. Pass exactly the same text to each -- do not `clean()` for one
-   side only. The same model means the same tokenizer, so the token sequences,
-   and the dropped first/last special tokens, line up.
-
-## Setup
-
-Start a `llama.cpp` server for `ditto` as in the main vignette, pointing it at
-the model you will validate against:
-
-```sh
-llama-server -m bge-m3-f16.gguf --embedding --pooling none --port 8080
-```
-
-Install the reference package in a Python environment:
-
-```sh
-pip install bert-score
-```
+5. **Identical input strings.** Both tools embed the raw string and neither
+   lowercases, so the same text goes to each, uncleaned. The shared model means a
+   shared tokenizer, so the token sequences and dropped special tokens line up.
 
 ## Test pairs
 
@@ -96,31 +67,33 @@ references <- rep("to what extent do you agree with the statement", 4)
 
 ## ditto scores
 
-`bertscore()` takes one pair at a time, so map it over the vectors and bind the
-results into a tibble.
+`bertscore()` takes one pair at a time, mapped over the vectors:
 
 ```{r}
 #| label: ditto-scores
 #| eval: false
-ditto_scores <- as.data.frame(
-  t(mapply(bertscore, candidates, references, USE.NAMES = FALSE))
-)
-round(ditto_scores, 5)
-#>   precision  recall      f1
-#> 1   1.00000 1.00000 1.00000
-#> 2   0.96706 0.96329 0.96517
-#> 3   0.79389 0.79100 0.79244
-#> 4   0.72340 0.71281 0.71807
+library(ditto)
+
+# The GGUF build of BAAI/bge-m3 -- the same model bert-score loads via model_type.
+start_llama_server(model = "bge-m3-f16.gguf")
+
+ditto_scores <- t(mapply(bertscore, candidates, references, USE.NAMES = FALSE))
+
+stop_llama_server()
 ```
+
+| precision |  recall |      f1 |
+|----------:|--------:|--------:|
+|   1.00000 | 1.00000 | 1.00000 |
+|   0.96706 | 0.96329 | 0.96517 |
+|   0.79389 | 0.79100 | 0.79244 |
+|   0.72340 | 0.71281 | 0.71807 |
 
 ## Reference scores
 
-Run the same pairs through `bert-score` with the settings from *What has to
-match*, and write the result to a CSV that R can read back. Save this as
-`reference.py`:
+The same pairs through `bert-score` with the settings from *What has to match*:
 
 ```python
-import csv
 from bert_score import score
 
 candidates = [
@@ -139,71 +112,26 @@ P, R, F = score(
     idf=False,                     # unweighted, to match bertscore()
     rescale_with_baseline=False,   # raw scores, to match bertscore()
 )
-
-with open("reference_scores.csv", "w", newline="") as f:
-    w = csv.writer(f)
-    w.writerow(["precision", "recall", "f1"])
-    for p, r, fl in zip(P.tolist(), R.tolist(), F.tolist()):
-        w.writerow([p, r, fl])
 ```
 
-```sh
-python reference.py
-```
-
-```{r}
-#| label: reference-scores
-#| eval: false
-reference_scores <- read.csv("reference_scores.csv")
-round(reference_scores, 5)
-#>   precision  recall      f1
-#> 1   1.00000 1.00000 1.00000
-#> 2   0.96709 0.96333 0.96521
-#> 3   0.79418 0.79127 0.79272
-#> 4   0.72388 0.71323 0.71852
-```
+| precision |  recall |      f1 |
+|----------:|--------:|--------:|
+|   1.00000 | 1.00000 | 1.00000 |
+|   0.96709 | 0.96333 | 0.96521 |
+|   0.79418 | 0.79127 | 0.79272 |
+|   0.72388 | 0.71323 | 0.71852 |
 
 ## Comparing the two
 
-Line the tables up and look at the largest absolute difference across every
-score. A correct reimplementation lands within a small tolerance everywhere.
+The two implementations agree score for score; nowhere do they differ by more
+than 0.0005. That confirms `ditto` computes the same metric as the reference.
 
-```{r}
-#| label: compare
-#| eval: false
-diffs <- abs(ditto_scores - reference_scores)
-max(diffs)
-#> [1] 0.000487
-
-as.data.frame(round(diffs, 5))
-#>   precision  recall      f1
-#> 1   0.00000 0.00000 0.00000
-#> 2   0.00003 0.00004 0.00004
-#> 3   0.00029 0.00028 0.00028
-#> 4   0.00049 0.00042 0.00045
-```
-
-The two implementations agree to within about 0.0005 on every score, which
-confirms `ditto` computes the same metric as the reference.
-
-## Where the small differences come from
-
-Exact equality is not expected, and the residual differences are benign:
-
-- **Numerical precision.** The server may emit embeddings at a different float
-  precision (e.g. `f16`) than the Python model holds in memory, so cosine
-  similarities differ in the last few digits before the greedy match averages
-  them.
-- **Tokenizer edge cases.** The same model implies the same vocabulary, but
-  `llama.cpp`'s GGUF tokenizer and Hugging Face's tokenizer can occasionally
-  split unusual whitespace or Unicode differently. Plain text rarely triggers
-  this; if a particular pair disagrees by more than the rest, inspect its tokens
-  with `token_embeddings()`.
-
-A difference much larger than this, or one that grows with sentence length,
-points to a real mismatch -- most often the layer (point 2 above), an
-accidentally enabled `idf` or baseline, or one side cleaning the text and the
-other not.
+| precision |  recall |      f1 |
+|----------:|--------:|--------:|
+|   0.00000 | 0.00000 | 0.00000 |
+|   0.00003 | 0.00004 | 0.00004 |
+|   0.00029 | 0.00027 | 0.00028 |
+|   0.00048 | 0.00042 | 0.00045 |
 
 ## References
 
