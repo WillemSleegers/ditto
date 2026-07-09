@@ -9,3 +9,5 @@
 .venv/
 reference_scores.csv
 ditto_scores.csv
+tests/.DS_Store
+.DS_Store
