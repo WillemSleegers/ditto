@@ -15,3 +15,11 @@ test_that("a pure reordering costs more than a single shift would", {
   # two substitutions rather than the one edit true TER would charge.
   expect_equal(ter("b a c d", "a b c d"), 2 / 4)
 })
+
+test_that("punctuation is tokenized separately from the word it follows", {
+  # Without this, "statement." and "statement?" would be two totally
+  # different tokens, hiding the fact that the word itself matches.
+  cand <- "do you agree with this statement."
+  ref <- "do you agree with this statement?"
+  expect_equal(ter(cand, ref), 1 / 7)
+})

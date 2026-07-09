@@ -1,6 +1,13 @@
 # Shared n-gram and alignment helpers used by bleu(), chrf(), rouge(), ter(),
 # and meteor(). Not exported.
 
+# Splits on whitespace, and further splits punctuation from adjacent word
+# characters into its own token, matching TER's tokenization convention
+# (Snover et al., 2006): "punctuation tokens are treated as normal words."
+tokenize_words <- function(x) {
+  stringr::str_extract_all(x, "[\\p{L}\\p{N}]+|[^\\p{L}\\p{N}\\s]")[[1]]
+}
+
 # All contiguous n-token sequences in a token vector, joined with `sep`
 # (" " for word tokens, "" for character tokens).
 get_ngrams <- function(tokens, n, sep = " ") {

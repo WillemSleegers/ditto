@@ -1,3 +1,12 @@
+test_that("tokenize_words splits punctuation from adjacent words", {
+  expect_equal(tokenize_words("do you agree?"), c("do", "you", "agree", "?"))
+  expect_equal(tokenize_words("a, b"), c("a", ",", "b"))
+})
+
+test_that("tokenize_words leaves plain words untouched", {
+  expect_equal(tokenize_words("a b c d"), c("a", "b", "c", "d"))
+})
+
 test_that("get_ngrams returns overlapping windows joined by sep", {
   expect_equal(get_ngrams(c("a", "b", "c"), 2), c("a b", "b c"))
   expect_equal(get_ngrams(c("a", "b", "c"), 2, sep = ""), c("ab", "bc"))

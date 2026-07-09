@@ -10,14 +10,20 @@
 #' The original TER also treats moving a contiguous block of words to a
 #' different position as a single edit (a "shift"), found by a heuristic
 #' search over candidate shifts, because finding the optimal set of shifts
-#' exactly is computationally intractable. This implementation omits that
-#' search and counts only insertions, deletions, and substitutions, which
-#' makes it equivalent to word error rate (WER) rather than true TER: a
-#' reordering of otherwise-matching words costs more here than in the
-#' original metric.
+#' exactly is provably NP-complete (Shapira & Storer, 2002). This
+#' implementation omits that search and counts only insertions, deletions,
+#' and substitutions, which makes it equivalent to word error rate (WER)
+#' rather than true TER: a reordering of otherwise-matching words costs more
+#' here than in the original metric.
 #'
-#' The word-level edit distance is obtained by encoding each word as a single
-#' character and reusing [stringdist::stringdist()]'s Levenshtein
+#' Candidate and reference are tokenized by splitting on whitespace and then
+#' splitting punctuation from adjacent word characters into its own token
+#' (so `"agree."` becomes `"agree"` and `"."`), matching the original TER's
+#' convention of treating punctuation as ordinary tokens rather than leaving
+#' it attached to words.
+#'
+#' The word-level edit distance is obtained by encoding each token as a
+#' single character and reusing [stringdist::stringdist()]'s Levenshtein
 #' implementation on the resulting strings.
 #'
 #' @param candidate A single candidate string.
@@ -30,12 +36,16 @@
 #' study of translation edit rate with targeted human annotation.
 #' *Proceedings of the 7th Conference of the Association for Machine
 #' Translation in the Americas*, 223-231.
+#'
+#' Shapira, D., & Storer, J. A. (2002). Edit distance with move operations.
+#' *Proceedings of the 13th Annual Symposium on Combinatorial Pattern
+#' Matching*, 85-98.
 #' @export
 #' @examples
 #' ter("the cat sat on the mat", "a cat was sitting on the mat")
 ter <- function(candidate, reference) {
-  cand_tokens <- stringr::str_split(candidate, "\\s+")[[1]]
-  ref_tokens <- stringr::str_split(reference, "\\s+")[[1]]
+  cand_tokens <- tokenize_words(candidate)
+  ref_tokens <- tokenize_words(reference)
   encoded <- encode_tokens(cand_tokens, ref_tokens)
   dist <- stringdist::stringdist(encoded$candidate, encoded$reference, method = "lv")
   dist / length(ref_tokens)
