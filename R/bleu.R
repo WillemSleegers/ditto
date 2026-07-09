@@ -55,16 +55,6 @@ brevity_penalty <- function(cand_tokens, ref_tokens) {
   }
 }
 
-# All contiguous n-token sequences in a token vector.
-get_ngrams <- function(tokens, n) {
-  if (length(tokens) < n) {
-    return(character(0))
-  }
-  vapply(seq_len(length(tokens) - n + 1), function(i) {
-    paste(tokens[i:(i + n - 1)], collapse = " ")
-  }, character(1))
-}
-
 # Fraction of candidate n-grams that appear in the reference, with each
 # reference n-gram credited at most as many times as it occurs.
 clipped_precision <- function(cand_tokens, ref_tokens, n) {
@@ -73,8 +63,5 @@ clipped_precision <- function(cand_tokens, ref_tokens, n) {
   if (length(cand_ngrams) == 0) {
     return(0)
   }
-  sum(vapply(unique(cand_ngrams), function(ng) {
-    min(sum(cand_ngrams == ng), sum(ref_ngrams == ng))
-  }, numeric(1))) /
-    length(cand_ngrams)
+  ngram_match_count(cand_ngrams, ref_ngrams) / length(cand_ngrams)
 }

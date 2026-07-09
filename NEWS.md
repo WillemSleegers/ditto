@@ -1,5 +1,11 @@
 # ditto (development version)
 
+* `chrf()` computes a character n-gram F-score.
+* `rouge()` computes ROUGE-1, ROUGE-2, and ROUGE-L.
+* `ter()` computes Translation Edit Rate (without the shift operation, so it
+  is equivalent to word error rate).
+* `meteor()` computes a METEOR score with exact and stem matching; synonym
+  matching is not included, as it requires a WordNet installation.
 * Initial version.
 * `clean()` normalises text by lowercasing, removing punctuation, and
   collapsing whitespace.
