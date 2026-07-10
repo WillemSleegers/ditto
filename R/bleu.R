@@ -14,10 +14,13 @@
 #' on very short strings there are few n-grams to aggregate, so scores are
 #' noisier.
 #'
+#' Words are tokenized as in [ter()]: whitespace separates tokens, and
+#' punctuation becomes a token of its own. A string with no words scores 0.
+#'
 #' @param candidate A single candidate string.
 #' @param reference A single reference string.
 #' @param max_n Maximum n-gram order to consider (default 4).
-#' @return A BLEU score between 0 and 1.
+#' @return A BLEU score between 0 and 1, or `NA` if either input is `NA`.
 #' @seealso [compare_strings()] to compute BLEU alongside other metrics, and
 #'   [bertscore()] for a meaning-based comparison.
 #' @references
@@ -32,9 +35,15 @@
 #'   "to what extent do you agree with the statement"
 #' )
 bleu <- function(candidate, reference, max_n = 4) {
-  cand_tokens <- stringr::str_split(candidate, "\\s+")[[1]]
-  ref_tokens <- stringr::str_split(reference, "\\s+")[[1]]
+  if (check_pair(candidate, reference)) {
+    return(NA_real_)
+  }
+  cand_tokens <- tokenize_words(candidate)
+  ref_tokens <- tokenize_words(reference)
   max_n <- min(max_n, length(cand_tokens), length(ref_tokens))
+  if (max_n < 1) {
+    return(0)
+  }
   precisions <- vapply(seq_len(max_n), function(n) {
     clipped_precision(cand_tokens, ref_tokens, n)
   }, numeric(1))

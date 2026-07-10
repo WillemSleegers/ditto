@@ -9,17 +9,25 @@
 #' @details
 #' Precision and recall are computed separately for every n-gram order from 1
 #' to `n` and averaged, then combined into an F-score that weights recall
-#' `beta` times as much as precision. `n` is capped at the length of the
-#' shorter string, the same treatment [bleu()] uses for short strings.
-#' Character n-grams are extracted from the raw string, so spaces count as
-#' ordinary characters and n-grams do not cross word boundaries on their own.
+#' `beta` times as much as precision.
+#'
+#' Whitespace is removed before the strings are split into characters, as in
+#' Popović (2015) and the reference `sacrebleu` implementation, so a character
+#' n-gram may span a word boundary and the number of spaces between words does
+#' not affect the score. `n` is capped at the length of the shorter string, so
+#' orders too high to produce any n-gram are dropped from the average rather
+#' than scored 0; this is `sacrebleu`'s effective-order handling, and `chrf()`
+#' agrees with it to within floating-point error. The scripts in
+#' `dev/validation/` reproduce the comparison.
+#'
+#' A string with no characters after whitespace is removed scores 0.
 #'
 #' @param candidate A single candidate string.
 #' @param reference A single reference string.
 #' @param n Maximum character n-gram order to consider (default 6).
 #' @param beta Weight of recall relative to precision (default 2, the
 #'   standard CHRF setting).
-#' @return A CHRF score between 0 and 1.
+#' @return A CHRF score between 0 and 1, or `NA` if either input is `NA`.
 #' @seealso [bleu()] for the word n-gram, precision-only counterpart, and
 #'   [rouge()] for a recall-oriented word n-gram score.
 #' @references
@@ -30,8 +38,11 @@
 #' @examples
 #' chrf("agreeing", "agreed")
 chrf <- function(candidate, reference, n = 6, beta = 2) {
-  cand_chars <- stringr::str_split(candidate, "")[[1]]
-  ref_chars <- stringr::str_split(reference, "")[[1]]
+  if (check_pair(candidate, reference)) {
+    return(NA_real_)
+  }
+  cand_chars <- tokenize_chars(candidate)
+  ref_chars <- tokenize_chars(reference)
   n <- min(n, length(cand_chars), length(ref_chars))
   if (n < 1) {
     return(0)

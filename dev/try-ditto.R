@@ -14,7 +14,8 @@ devtools::load_all(".")
 
 # Confirm the exported API:
 ls("package:ditto")
-# Expect: bertscore, bleu, clean, compare_strings, token_embeddings
+# Expect: bertscore, bleu, chrf, clean, compare_strings, cosine_similarity,
+# meteor, rouge, ter, wer, token_embeddings, plus the llama server helpers.
 
 # 2. Documentation -------------------------------------------------------------
 

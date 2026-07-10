@@ -17,12 +17,16 @@
 #' distance under insertions and deletions only; the LCS length is
 #' `(length(candidate) + length(reference) - distance) / 2`.
 #'
+#' Words are tokenized as in [ter()]: whitespace separates tokens, and
+#' punctuation becomes a token of its own. A string with no words scores 0,
+#' since there are no n-grams to match.
+#'
 #' @param candidate A single candidate string.
 #' @param reference A single reference string.
 #' @param variant Which ROUGE variant to compute: `"1"` (unigram), `"2"`
 #'   (bigram), or `"l"` (longest common subsequence).
 #' @param beta Weight of recall relative to precision (default 1).
-#' @return A ROUGE score between 0 and 1.
+#' @return A ROUGE score between 0 and 1, or `NA` if either input is `NA`.
 #' @seealso [bleu()] for the precision-only, brevity-penalized counterpart,
 #'   and [chrf()] for a character n-gram F-score.
 #' @references
@@ -35,8 +39,11 @@
 #' rouge("the cat sat on the mat", "a cat was sitting on the mat", variant = "l")
 rouge <- function(candidate, reference, variant = c("1", "2", "l"), beta = 1) {
   variant <- match.arg(variant)
-  cand_tokens <- stringr::str_split(candidate, "\\s+")[[1]]
-  ref_tokens <- stringr::str_split(reference, "\\s+")[[1]]
+  if (check_pair(candidate, reference)) {
+    return(NA_real_)
+  }
+  cand_tokens <- tokenize_words(candidate)
+  ref_tokens <- tokenize_words(reference)
 
   if (variant == "l") {
     matches <- lcs_length(cand_tokens, ref_tokens)

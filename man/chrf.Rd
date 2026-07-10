@@ -17,7 +17,7 @@ chrf(candidate, reference, n = 6, beta = 2)
 standard CHRF setting).}
 }
 \value{
-A CHRF score between 0 and 1.
+A CHRF score between 0 and 1, or \code{NA} if either input is \code{NA}.
 }
 \description{
 Computes a character n-gram F-score for a candidate string against a
@@ -29,10 +29,18 @@ words with the reference can still share most of its character n-grams.
 \details{
 Precision and recall are computed separately for every n-gram order from 1
 to \code{n} and averaged, then combined into an F-score that weights recall
-\code{beta} times as much as precision. \code{n} is capped at the length of the
-shorter string, the same treatment \code{\link[=bleu]{bleu()}} uses for short strings.
-Character n-grams are extracted from the raw string, so spaces count as
-ordinary characters and n-grams do not cross word boundaries on their own.
+\code{beta} times as much as precision.
+
+Whitespace is removed before the strings are split into characters, as in
+Popović (2015) and the reference \code{sacrebleu} implementation, so a character
+n-gram may span a word boundary and the number of spaces between words does
+not affect the score. \code{n} is capped at the length of the shorter string, so
+orders too high to produce any n-gram are dropped from the average rather
+than scored 0; this is \code{sacrebleu}'s effective-order handling, and \code{chrf()}
+agrees with it to within floating-point error. The scripts in
+\verb{dev/validation/} reproduce the comparison.
+
+A string with no characters after whitespace is removed scores 0.
 }
 \examples{
 chrf("agreeing", "agreed")

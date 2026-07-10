@@ -8,12 +8,24 @@
 #' @details
 #' This implementation covers exact and stem matching only; it does not
 #' include METEOR's synonym-matching stage, which requires a WordNet
-#' installation available for only a handful of languages. Matching also
-#' departs from the original algorithm's match-then-merge search: instead of
-#' preferring exact matches and filling gaps with stem matches, words are
-#' stemmed first and then aligned in one pass by longest common subsequence,
-#' which is simpler but can occasionally choose a different alignment than
-#' the original search would.
+#' installation available for only a handful of languages. Scores therefore
+#' agree with the reference implementation on text whose matching words are
+#' not synonyms, and are lower than it where synonyms would have matched.
+#'
+#' Alignment follows the original's staged search. Words that match exactly
+#' are aligned first; the words neither side has claimed are then matched the
+#' same way by stem. Matches may cross, so words that appear in both strings
+#' in a different order are still matched, and the reordering is charged for
+#' by the fragmentation penalty below rather than by dropping the words from
+#' the alignment.
+#'
+#' When a word repeats, which of its occurrences is matched changes how the
+#' matched words chunk together. Each stage scans the candidate from right to
+#' left and takes the latest unclaimed reference word, which reproduces
+#' `nltk.translate.meteor_score`; ditto's scores agree with it to within
+#' floating-point error on text with no synonym matches. This is a heuristic,
+#' not the chunk-minimal alignment the original tie-break calls for, and a
+#' left-to-right scan would sometimes find fewer chunks.
 #'
 #' Precision and recall over the aligned words are combined into an F-score
 #' that weights recall `recall_weight` times as much as precision (default
@@ -24,13 +36,19 @@
 #' words but scattered across the sentence scores lower than one that
 #' matches them in one contiguous run.
 #'
+#' Stemming is language-specific. `language` is passed to
+#' [SnowballC::wordStem()]; call [SnowballC::getStemLanguages()] for the
+#' languages it supports.
+#'
 #' @param candidate A single candidate string.
 #' @param reference A single reference string.
+#' @param language Language used to stem words before matching (default
+#'   `"en"`), passed to [SnowballC::wordStem()].
 #' @param recall_weight How much more heavily recall counts than precision
 #'   in the F-score (default 9).
 #' @param gamma Fragmentation penalty coefficient (default 0.5).
 #' @param frag_power Fragmentation penalty exponent (default 3).
-#' @return A METEOR score between 0 and 1.
+#' @return A METEOR score between 0 and 1, or `NA` if either input is `NA`.
 #' @seealso [bleu()] for the exact-match, precision-only counterpart.
 #' @references
 #' Banerjee, S., & Lavie, A. (2005). METEOR: An automatic metric for MT
@@ -41,15 +59,27 @@
 #' @export
 #' @examples
 #' meteor("the cats are agreeing", "the cat agreed")
-meteor <- function(candidate, reference, recall_weight = 9, gamma = 0.5,
-                   frag_power = 3) {
-  cand_tokens <- stringr::str_split(stringr::str_to_lower(candidate), "\\s+")[[1]]
-  ref_tokens <- stringr::str_split(stringr::str_to_lower(reference), "\\s+")[[1]]
+#'
+#' # Reordered words are matched, then charged a fragmentation penalty.
+#' meteor("the cat sat", "sat the cat")
+#'
+#' # Stemming follows the language of the text.
+#' meteor("de katten liepen", "de kat liep", language = "dutch")
+meteor <- function(candidate, reference, language = "en", recall_weight = 9,
+                   gamma = 0.5, frag_power = 3) {
+  if (check_pair(candidate, reference)) {
+    return(NA_real_)
+  }
+  cand_tokens <- tokenize_words(stringr::str_to_lower(candidate))
+  ref_tokens <- tokenize_words(stringr::str_to_lower(reference))
+  if (length(cand_tokens) == 0 || length(ref_tokens) == 0) {
+    return(0)
+  }
 
-  cand_stems <- SnowballC::wordStem(cand_tokens, language = "en")
-  ref_stems <- SnowballC::wordStem(ref_tokens, language = "en")
+  cand_stems <- SnowballC::wordStem(cand_tokens, language = language)
+  ref_stems <- SnowballC::wordStem(ref_tokens, language = language)
 
-  pairs <- lcs_alignment(cand_stems, ref_stems)
+  pairs <- staged_alignment(cand_tokens, ref_tokens, cand_stems, ref_stems)
   matches <- nrow(pairs)
   if (matches == 0) {
     return(0)

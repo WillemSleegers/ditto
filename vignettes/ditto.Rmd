@@ -28,12 +28,13 @@ free-text responses.
 The metrics differ in what counts as a difference. Three character-level
 metrics -- edit distance, Jaccard, and cosine -- come from
 [`stringdist`](https://github.com/markvanderloo/stringdist) and are available
-only through `compare_strings()`. `bleu()` compares word sequences, and the
-embedding metrics `bertscore()` and `cosine_similarity()` compare meaning
-through contextual embeddings; these three can also be called on their own.
-`compare_strings()` runs the character- and word-level metrics together, and
-the embedding metrics too when an embedding server is available, returning them
-in one table.
+only through `compare_strings()`. Six word-level metrics -- `bleu()`, `chrf()`,
+`rouge()`, `ter()`, `wer()`, and `meteor()` -- compare word or character
+sequences, and the embedding metrics `bertscore()` and `cosine_similarity()`
+compare meaning through contextual embeddings; all of these can also be called
+on their own. `compare_strings()` runs the character- and word-level metrics
+together, and the embedding metrics too when an embedding server is available,
+returning them in one table.
 
 ## Cleaning text
 
@@ -65,21 +66,22 @@ labels <- c("Near-identical", "Paraphrase", "Different", "Unrelated")
 variants <- clean(variants)
 ```
 
-## Character and word metrics
+## Character metrics
 
-`compare_strings()` computes four metrics for each candidate against the
-reference and returns a tibble with one row per pair. Three are character
-metrics from `stringdist`: Levenshtein (single-character edits), Jaccard
-(overlap of the character sets), and cosine (overlap of character
-frequencies). The fourth is BLEU, which is described below.
+`compare_strings()` computes every non-embedding metric for each candidate
+against the reference and returns a tibble with one row per pair. Three of the
+columns are character metrics from `stringdist`: Levenshtein (single-character
+edits), Jaccard (overlap of the character sets), and cosine (overlap of
+character frequencies).
 
 ```{r}
 #| label: compare
 result <- compare_strings(variants, reference)
-knitr::kable(cbind(label = labels, round(result[, -(1:2)], 2)))
+character_metrics <- c("levenshtein", "jaccard", "cosine")
+knitr::kable(cbind(label = labels, round(result[character_metrics], 2)))
 ```
 
-The near-identical variant scores near 1 on every metric. The other three
+The near-identical variant scores near 1 on all three. The other variants
 diverge in ways that reveal what each metric responds to. The unrelated
 question still scores 0.92 on cosine -- here a *character* cosine, the overlap
 of character frequencies, not to be confused with the meaning-based
@@ -106,10 +108,108 @@ bleu(
 ```
 
 BLEU returns 0 when any n-gram order has no matches at all, which is why the
-"Different" and "Unrelated" variants score 0 in the table above: neither
+"Different" and "Unrelated" variants score 0 in the table below: neither
 shares a 4-word sequence with the reference. This makes BLEU stricter than the
 character metrics on word order, and well suited to translation evaluation,
 where the arrangement of words carries meaning.
+
+## Beyond BLEU: CHRF, ROUGE, TER, and METEOR
+
+BLEU's all-or-nothing behaviour, and its indifference to recall, motivated four
+later metrics. Each is available on its own and as a column of
+`compare_strings()`.
+
+`chrf()` counts *character* n-grams rather than word n-grams, and combines
+precision with recall. Because it works below the word, an inflected form that
+shares no whole word with the reference still shares most of its characters:
+
+```{r}
+#| label: chrf
+c(chrf = chrf("agreeing", "agreed"), bleu = bleu("agreeing", "agreed"))
+```
+
+Whitespace is stripped before the character n-grams are extracted, so spacing
+cannot change the score. `chrf()` agrees with `sacrebleu`'s CHRF to within
+floating-point error; `vignette("metrics")` records what every metric here is
+validated against.
+
+`rouge()` is the recall-oriented counterpart to BLEU. Variants `"1"` and `"2"`
+count shared unigrams and bigrams; variant `"l"` matches on the longest common
+subsequence of words, so a long run of words in the same order scores highly
+even when other words are interspersed. There is no brevity penalty, so a short
+candidate is not punished for what it omits beyond the loss of recall.
+
+```{r}
+#| label: rouge
+rouge("the cat sat on the mat", "a cat was sitting on the mat")
+rouge("the cat sat on the mat", "a cat was sitting on the mat", variant = "l")
+```
+
+`ter()` reports Translation Edit Rate: the number of edits needed to turn the
+candidate into the reference, divided by the reference length. It is an *error*
+rate rather than a similarity, so 0 is a perfect match, lower is better, and it
+is not bounded above by 1. Alongside insertions, deletions, and substitutions it
+counts a *shift* -- a contiguous block of words moved elsewhere -- as a single
+edit, however many words the block holds.
+
+`wer()` is the same rate without shifts, which is exactly word error rate. The
+pair is more informative than either alone: where they diverge, the candidate
+has the right words in the wrong place.
+
+```{r}
+#| label: ter
+ter("the cat sat on the mat", "a cat was sitting on the mat")
+
+# A block of three words moved: one shift, or six rewrites.
+c(ter = ter("d e f a b c", "a b c d e f"), wer = wer("d e f a b c", "a b c d e f"))
+```
+
+`meteor()` matches words by stem as well as by exact form, weights recall nine
+times as heavily as precision, and then discounts the result by a fragmentation
+penalty counting how many contiguous chunks the matched words fall into.
+Reordered words are still matched -- the penalty, not a lost match, is what
+charges for the reordering:
+
+```{r}
+#| label: meteor
+meteor("the cats are agreeing", "the cat agreed")
+meteor("the cat sat", "sat the cat") # every word matches, across two chunks
+```
+
+Synonym matching, METEOR's third stage, is not implemented: it needs a WordNet
+installation that exists for only a handful of languages. On text where no
+synonyms would have matched, `meteor()` agrees with `nltk`'s implementation to
+within floating-point error.
+
+Stemming is language-specific, so pass `language` for text that is not English.
+Left at the default, the English stemmer sees no match between Dutch plurals
+and their singulars:
+
+```{r}
+#| label: meteor-language
+c(
+  dutch = meteor("de katten liepen", "de kat liep", language = "dutch"),
+  english = meteor("de katten liepen", "de kat liep")
+)
+```
+
+Across the four variants these metrics separate the near-identical rewording
+from the unrelated question far more sharply than the character metrics did:
+
+```{r}
+#| label: word-metrics
+word_metrics <- c("bleu", "chrf", "rouge_1", "rouge_l", "ter", "wer", "meteor")
+knitr::kable(cbind(label = labels, round(result[word_metrics], 2)))
+```
+
+BLEU collapses to 0 for both the "Different" and "Unrelated" variants, which
+tells you only that neither shares a 4-gram. The others keep ranking them:
+METEOR falls from 0.26 to 0.05 and TER climbs from 0.80 to 0.90. Two columns
+agree throughout, each for its own reason. `rouge_1` and `rouge_l` match because
+the words these variants share with the reference happen to appear in the same
+order. `ter` and `wer` match because no block of words is merely displaced here;
+they part company on a candidate that reorders the reference rather than
+rewording it.
 
 ## Semantic similarity with embeddings
 
@@ -276,8 +376,10 @@ Both score the cross-lingual pair almost as high as an English paraphrase.
 ### All metrics together
 
 Setting `bert = TRUE` adds the two embedding columns, `bertscore_f1` and
-`cosine_emb`, to `compare_strings()`; pass `pooling = "cls"` for `bge-m3`. The
-full table makes the difference between surface and semantic similarity visible.
+`cosine_emb`, to `compare_strings()`; pass `pooling = "cls"` for `bge-m3`.
+Placing them beside the surface metrics makes the difference between surface
+and semantic similarity visible. The call returns every column shown earlier;
+a representative few are reproduced here.
 
 ```{r}
 #| label: compare-bert
@@ -285,19 +387,19 @@ full table makes the difference between surface and semantic similarity visible.
 compare_strings(variants, reference, bert = TRUE, pooling = "cls")
 ```
 
-| label          | levenshtein | jaccard | cosine | bleu | bertscore_f1 | cosine_emb |
-|:---------------|------------:|--------:|-------:|-----:|-------------:|-----------:|
-| Near-identical |        0.98 |    1.00 |   1.00 | 0.88 |         0.99 |       0.97 |
-| Paraphrase     |        0.49 |    0.86 |   0.94 | 0.26 |         0.96 |       0.93 |
-| Different      |        0.35 |    0.67 |   0.84 | 0.00 |         0.78 |       0.65 |
-| Unrelated      |        0.25 |    0.82 |   0.92 | 0.00 |         0.71 |       0.49 |
+| label          | cosine | bleu | meteor |  ter | bertscore_f1 | cosine_emb |
+|:---------------|-------:|-----:|-------:|-----:|-------------:|-----------:|
+| Near-identical |   1.00 | 0.88 |   1.00 | 0.10 |         0.99 |       0.97 |
+| Paraphrase     |   0.94 | 0.26 |   0.56 | 0.70 |         0.96 |       0.93 |
+| Different      |   0.84 | 0.00 |   0.26 | 0.80 |         0.78 |       0.65 |
+| Unrelated      |   0.92 | 0.00 |   0.05 | 0.90 |         0.71 |       0.49 |
 
 Both embedding metrics keep the paraphrase high (0.96 and 0.93) even though its
-BLEU is low (0.26), because it preserves meaning while changing words. The
-different and unrelated questions, which character cosine left at a misleading
-0.84 and 0.92, separate much better on `cosine_emb` (0.65 and 0.49) than on the
-anisotropic `bertscore_f1` (0.78 and 0.71) -- though the baseline rescaling below
-recovers that separation for BERTScore too.
+BLEU is low (0.26) and its METEOR only 0.56, because it preserves meaning while
+changing words. The different and unrelated questions, which character cosine
+left at a misleading 0.84 and 0.92, separate much better on `cosine_emb` (0.65
+and 0.49) than on the anisotropic `bertscore_f1` (0.78 and 0.71) -- though the
+baseline rescaling below recovers that separation for BERTScore too.
 
 ### Calibrating scores with a baseline
 
@@ -379,7 +481,24 @@ as a difference.
   fast and need no external model. Cosine is usually the most informative of
   the three; Jaccard adds little beside it.
 - Use **BLEU** when word order matters, such as translation evaluation, and
-  you want a candidate penalised for rearranging or dropping words.
+  you want a candidate penalised for rearranging or dropping words. Be aware
+  that it collapses to 0 as soon as one n-gram order has no match, so it
+  cannot rank the candidates that miss badly.
+- Use **CHRF** for morphologically rich languages, or wherever inflection
+  should not count as a mismatch. Because it scores character n-grams, it
+  degrades gracefully instead of collapsing to 0.
+- Use **ROUGE** when coverage of the reference matters more than precision, as
+  in summarisation. Variant `"l"` is the forgiving one: it rewards a long run
+  of words in the right order and ignores what is interspersed.
+- Use **METEOR** when you want one number that credits stem matches, leans on
+  recall, and still charges for reordering. Set `language` to match your text.
+- Use **TER** when you want to report how much editing a candidate needs
+  rather than how similar it is, and a displaced block of words should cost one
+  edit rather than many. Remember it runs the other way: 0 is perfect, and it
+  can exceed 1.
+- Use **WER** where word order is not negotiable, as in speech recognition. It
+  is `ter()` without the shift, so reading the two side by side tells you how
+  much of the error is misplacement rather than wrong words.
 - Use the **embedding metrics** when paraphrasing is expected and valid
   responses may use different words, or even different languages, for the same
   meaning. They are the only metrics here that score such responses correctly,

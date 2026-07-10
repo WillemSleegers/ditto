@@ -4,11 +4,12 @@ Version: 0.0.0.9000
 Authors@R:
     person("Willem", "Sleegers", , "w.sleegers@me.com", role = c("aut", "cre"))
 Description: Utilities for comparing strings and short texts. Includes
-    from-scratch implementations of BLEU, CHRF, ROUGE, TER, and METEOR, and a
-    BERTScore metric computed from token-level embeddings served by a local
-    'llama.cpp' server, alongside a unified compare_strings() interface that
-    returns edit-distance, n-gram, and embedding-based similarity scores in a
-    single table.
+    from-scratch implementations of BLEU, CHRF, ROUGE, TER, word error rate,
+    and METEOR, and a BERTScore metric computed from token-level embeddings
+    served by a local 'llama.cpp' server, alongside a unified
+    compare_strings() interface that returns edit-distance, n-gram, and
+    embedding-based similarity scores in a single table. Scores are validated
+    against the reference implementations of each metric.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

@@ -8,6 +8,7 @@
     "scores.\n\n",
     "To get started, see the available vignettes:\n",
     "  vignette(\"ditto\")                  # Comparing strings with ditto\n",
+    "  vignette(\"metrics\")                # The metrics, and how they are validated\n",
     "  vignette(\"bertscore-validation\")   # Validating bertscore() vs. the reference\n",
     "  browseVignettes(\"ditto\")          # List all vignettes"
   )

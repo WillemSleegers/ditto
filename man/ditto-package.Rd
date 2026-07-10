@@ -6,7 +6,7 @@
 \alias{ditto-package}
 \title{ditto: String and Text Similarity Metrics}
 \description{
-Utilities for comparing strings and short texts. Includes from-scratch implementations of BLEU, CHRF, ROUGE, TER, and METEOR, and a BERTScore metric computed from token-level embeddings served by a local 'llama.cpp' server, alongside a unified compare_strings() interface that returns edit-distance, n-gram, and embedding-based similarity scores in a single table.
+Utilities for comparing strings and short texts. Includes from-scratch implementations of BLEU, CHRF, ROUGE, TER, word error rate, and METEOR, and a BERTScore metric computed from token-level embeddings served by a local 'llama.cpp' server, alongside a unified compare_strings() interface that returns edit-distance, n-gram, and embedding-based similarity scores in a single table. Scores are validated against the reference implementations of each metric.
 }
 \seealso{
 Useful links:

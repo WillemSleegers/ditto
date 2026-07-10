@@ -8,6 +8,7 @@ compare_strings(
   candidate,
   reference,
   bert = FALSE,
+  language = "en",
   host = "http://localhost:8080",
   prefix = "",
   baseline = NULL,
@@ -19,6 +20,9 @@ compare_strings(
 
 \item{bert}{Whether to include the embedding-based columns (\code{bertscore_f1}
 and \code{cosine_emb}). Default \code{FALSE}.}
+
+\item{language}{Language used to stem words for the \code{meteor} column
+(default \code{"en"}); see \code{\link[=meteor]{meteor()}}.}
 
 \item{host}{Base URL of the llama.cpp server, used when \code{bert = TRUE}.}
 
@@ -37,21 +41,27 @@ rescaling, used when \code{bert = TRUE}; see \code{\link[=bertscore_baseline]{be
 \value{
 A \link[tibble:tibble]{tibble} with one row per input pair, containing
 the candidate and reference text and a column for each metric:
-\code{levenshtein}, \code{jaccard}, \code{cosine} (character-frequency), \code{bleu}, and, when
-\code{bert = TRUE}, \code{bertscore_f1} and \code{cosine_emb} (whole-string embedding
-cosine).
+\code{levenshtein}, \code{jaccard}, \code{cosine} (character-frequency), \code{bleu}, \code{chrf},
+\code{rouge_1}, \code{rouge_l}, \code{ter}, \code{wer}, \code{meteor}, and, when \code{bert = TRUE},
+\code{bertscore_f1} and \code{cosine_emb} (whole-string embedding cosine).
 }
 \description{
 Computes several similarity metrics for aligned candidate and reference
 strings and returns them in a single table. Edit-distance, n-gram, and
-character-frequency metrics come from \code{\link[stringdist:stringsim]{stringdist::stringsim()}}; BLEU is
-computed by \code{\link[=bleu]{bleu()}}. The embedding-based metrics (BERTScore F1 and
+character-frequency metrics come from \code{\link[stringdist:stringsim]{stringdist::stringsim()}}; the
+translation metrics are computed by \code{\link[=bleu]{bleu()}}, \code{\link[=chrf]{chrf()}}, \code{\link[=rouge]{rouge()}}, \code{\link[=ter]{ter()}},
+\code{\link[=wer]{wer()}}, and \code{\link[=meteor]{meteor()}}. The embedding-based metrics (BERTScore F1 and
 whole-string cosine) are optional because they require a running
 \code{llama.cpp} server.
 }
 \details{
 Inputs are compared as given; clean them first with \code{\link[=clean]{clean()}} if surface
 differences such as case or punctuation should be ignored.
+
+Every column is a similarity between 0 and 1 except \code{ter} and \code{wer}, which
+are error rates: they are 0 for a perfect match, higher is worse, and they
+are not bounded above. They differ only in that \code{ter} counts a moved block
+of words as a single edit.
 }
 \examples{
 compare_strings(
@@ -61,6 +71,7 @@ compare_strings(
 )
 }
 \seealso{
-\code{\link[=bleu]{bleu()}}, \code{\link[=bertscore]{bertscore()}}, and \code{\link[=cosine_similarity]{cosine_similarity()}} for the
-individual metrics, and \code{\link[=clean]{clean()}} to normalise text before comparison.
+\code{\link[=bleu]{bleu()}}, \code{\link[=chrf]{chrf()}}, \code{\link[=rouge]{rouge()}}, \code{\link[=ter]{ter()}}, \code{\link[=wer]{wer()}}, \code{\link[=meteor]{meteor()}},
+\code{\link[=bertscore]{bertscore()}}, and \code{\link[=cosine_similarity]{cosine_similarity()}} for the individual metrics, and
+\code{\link[=clean]{clean()}} to normalise text before comparison.
 }

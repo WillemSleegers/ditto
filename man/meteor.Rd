@@ -4,12 +4,22 @@
 \alias{meteor}
 \title{Compute a METEOR score}
 \usage{
-meteor(candidate, reference, recall_weight = 9, gamma = 0.5, frag_power = 3)
+meteor(
+  candidate,
+  reference,
+  language = "en",
+  recall_weight = 9,
+  gamma = 0.5,
+  frag_power = 3
+)
 }
 \arguments{
 \item{candidate}{A single candidate string.}
 
 \item{reference}{A single reference string.}
+
+\item{language}{Language used to stem words before matching (default
+\code{"en"}), passed to \code{\link[SnowballC:wordStem]{SnowballC::wordStem()}}.}
 
 \item{recall_weight}{How much more heavily recall counts than precision
 in the F-score (default 9).}
@@ -19,7 +29,7 @@ in the F-score (default 9).}
 \item{frag_power}{Fragmentation penalty exponent (default 3).}
 }
 \value{
-A METEOR score between 0 and 1.
+A METEOR score between 0 and 1, or \code{NA} if either input is \code{NA}.
 }
 \description{
 Computes a METEOR score for a candidate string against a reference.
@@ -30,12 +40,24 @@ well as by exact form, so "agreeing" and "agreed" count as a match.
 \details{
 This implementation covers exact and stem matching only; it does not
 include METEOR's synonym-matching stage, which requires a WordNet
-installation available for only a handful of languages. Matching also
-departs from the original algorithm's match-then-merge search: instead of
-preferring exact matches and filling gaps with stem matches, words are
-stemmed first and then aligned in one pass by longest common subsequence,
-which is simpler but can occasionally choose a different alignment than
-the original search would.
+installation available for only a handful of languages. Scores therefore
+agree with the reference implementation on text whose matching words are
+not synonyms, and are lower than it where synonyms would have matched.
+
+Alignment follows the original's staged search. Words that match exactly
+are aligned first; the words neither side has claimed are then matched the
+same way by stem. Matches may cross, so words that appear in both strings
+in a different order are still matched, and the reordering is charged for
+by the fragmentation penalty below rather than by dropping the words from
+the alignment.
+
+When a word repeats, which of its occurrences is matched changes how the
+matched words chunk together. Each stage scans the candidate from right to
+left and takes the latest unclaimed reference word, which reproduces
+\code{nltk.translate.meteor_score}; ditto's scores agree with it to within
+floating-point error on text with no synonym matches. This is a heuristic,
+not the chunk-minimal alignment the original tie-break calls for, and a
+left-to-right scan would sometimes find fewer chunks.
 
 Precision and recall over the aligned words are combined into an F-score
 that weights recall \code{recall_weight} times as much as precision (default
@@ -44,9 +66,19 @@ fragmentation penalty then discounts that score based on how many
 contiguous chunks the matched words fall into: \code{penalty = gamma * (chunks / matches) ^ frag_power}, so a candidate that matches the same
 words but scattered across the sentence scores lower than one that
 matches them in one contiguous run.
+
+Stemming is language-specific. \code{language} is passed to
+\code{\link[SnowballC:wordStem]{SnowballC::wordStem()}}; call \code{\link[SnowballC:getStemLanguages]{SnowballC::getStemLanguages()}} for the
+languages it supports.
 }
 \examples{
 meteor("the cats are agreeing", "the cat agreed")
+
+# Reordered words are matched, then charged a fragmentation penalty.
+meteor("the cat sat", "sat the cat")
+
+# Stemming follows the language of the text.
+meteor("de katten liepen", "de kat liep", language = "dutch")
 }
 \references{
 Banerjee, S., & Lavie, A. (2005). METEOR: An automatic metric for MT

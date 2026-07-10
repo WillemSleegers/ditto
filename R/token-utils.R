@@ -1,11 +1,46 @@
-# Shared n-gram and alignment helpers used by bleu(), chrf(), rouge(), ter(),
-# and meteor(). Not exported.
+# Shared tokenization, n-gram, and alignment helpers used by bleu(), chrf(),
+# rouge(), ter(), and meteor(). Not exported.
 
-# Splits on whitespace, and further splits punctuation from adjacent word
-# characters into its own token, matching TER's tokenization convention
-# (Snover et al., 2006): "punctuation tokens are treated as normal words."
+# The metrics score one pair of strings at a time. Erroring on longer vectors
+# stops a vectorized call from silently scoring only the first pair.
+check_string <- function(x, arg) {
+  if (!is.character(x) || length(x) != 1L) {
+    stop(
+      sprintf(
+        "`%s` must be a single string, not %s of length %d.",
+        arg, class(x)[1], length(x)
+      ),
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
+}
+
+# Validates a candidate/reference pair and reports whether either is missing,
+# in which case the metric returns NA rather than scoring the string "NA".
+check_pair <- function(candidate, reference) {
+  check_string(candidate, "candidate")
+  check_string(reference, "reference")
+  is.na(candidate) || is.na(reference)
+}
+
+# Word tokens: splits on whitespace, and further splits punctuation from
+# adjacent word characters into its own token, matching TER's convention
+# (Snover et al., 2006) that "punctuation tokens are treated as normal words"
+# and sacrebleu's `13a` tokenizer. Runs of whitespace and empty strings yield
+# no tokens, so surrounding whitespace cannot change a score.
 tokenize_words <- function(x) {
   stringr::str_extract_all(x, "[\\p{L}\\p{N}]+|[^\\p{L}\\p{N}\\s]")[[1]]
+}
+
+# Character tokens for chrF: whitespace is removed before the string is split
+# into characters, as in Popovic (2015) and sacrebleu's default settings.
+tokenize_chars <- function(x) {
+  x <- stringr::str_remove_all(x, "\\s")
+  if (!nzchar(x)) {
+    return(character(0))
+  }
+  stringr::str_split(x, "")[[1]]
 }
 
 # All contiguous n-token sequences in a token vector, joined with `sep`
@@ -30,10 +65,13 @@ ngram_match_count <- function(cand_ngrams, ref_ngrams) {
   }, numeric(1)))
 }
 
-# Map two token vectors onto a shared vocabulary of single Unicode code
-# points (from the Private Use Area, so they cannot collide with real
-# text), so that word-level sequences can be compared with stringdist's
-# character-based edit distance functions.
+# Map two token vectors onto a shared vocabulary of single Unicode code points,
+# so that word-level sequences can be compared with stringdist's
+# character-based edit distance functions. The encoded strings contain only
+# these symbols -- never the original text -- so the symbols only have to be
+# distinct from each other, which `match()` on a shared vocabulary guarantees.
+# Numbering starts in the Private Use Area to keep the encoded strings from
+# looking like meaningful text when printed.
 encode_tokens <- function(cand_tokens, ref_tokens) {
   vocab <- unique(c(cand_tokens, ref_tokens))
   symbols <- intToUtf8(0xE000 + seq_along(vocab) - 1, multiple = TRUE)
@@ -43,48 +81,69 @@ encode_tokens <- function(cand_tokens, ref_tokens) {
   )
 }
 
-# Longest common subsequence alignment between two token vectors, returned
-# as a two-column (i, j) matrix of matched positions in increasing order.
-# Ties in the backtrace are broken arbitrarily; any tie-breaking yields a
-# valid maximum-length alignment, though not necessarily a unique one.
-lcs_alignment <- function(a, b) {
-  n <- length(a)
-  m <- length(b)
-  empty <- matrix(integer(0), ncol = 2, dimnames = list(NULL, c("i", "j")))
-  if (n == 0 || m == 0) {
-    return(empty)
+# Align two token vectors by walking `a` from right to left and matching each
+# token to the last not-yet-matched token of `b` with the same value. Returns a
+# two-column (i, j) matrix of matched positions, ordered by i.
+#
+# Every token type contributes min(count in a, count in b) matches, which is
+# the largest number any alignment can achieve. Unlike a longest common
+# subsequence, matches may cross, so tokens that appear in both vectors but in
+# a different order are still matched -- METEOR charges for the reordering
+# through its fragmentation penalty rather than by dropping them.
+#
+# When a token repeats, which occurrence gets matched changes how the matched
+# tokens chunk together. Scanning right to left and taking the latest available
+# partner reproduces `nltk.translate.meteor_score`, so ditto's scores can be
+# checked against it. Both directions are heuristics: neither is guaranteed to
+# find the chunk-minimal alignment that METEOR's tie-break calls for.
+greedy_alignment <- function(a, b) {
+  if (length(a) == 0 || length(b) == 0) {
+    return(empty_alignment())
   }
 
-  dp <- matrix(0L, nrow = n + 1, ncol = m + 1)
-  for (i in seq_len(n)) {
-    for (j in seq_len(m)) {
-      dp[i + 1, j + 1] <- if (a[i] == b[j]) {
-        dp[i, j] + 1L
-      } else {
-        max(dp[i, j + 1], dp[i + 1, j])
-      }
-    }
-  }
-
-  i <- n
-  j <- m
+  matched <- logical(length(b))
   pairs <- list()
-  while (i > 0 && j > 0) {
-    if (a[i] == b[j]) {
-      pairs[[length(pairs) + 1]] <- c(i = i, j = j)
-      i <- i - 1
-      j <- j - 1
-    } else if (dp[i, j + 1] >= dp[i + 1, j]) {
-      i <- i - 1
-    } else {
-      j <- j - 1
+  for (i in rev(seq_along(a))) {
+    j <- which(!matched & b == a[i])
+    if (length(j) == 0) {
+      next
     }
+    last <- j[length(j)]
+    matched[last] <- TRUE
+    pairs[[length(pairs) + 1]] <- c(i = i, j = last)
   }
 
   if (length(pairs) == 0) {
-    return(empty)
+    return(empty_alignment())
   }
-  do.call(rbind, rev(pairs))
+  pairs <- do.call(rbind, pairs)
+  pairs[order(pairs[, "i"]), , drop = FALSE]
+}
+
+empty_alignment <- function() {
+  matrix(integer(0), ncol = 2, dimnames = list(NULL, c("i", "j")))
+}
+
+# METEOR's staged match-then-merge search: words that match exactly are aligned
+# first, and only the words neither side has claimed are then matched by stem.
+# Stemming everything up front instead would let a stem match steal a word that
+# an exact match wants, changing how the matched words chunk together.
+staged_alignment <- function(cand, ref, cand_stems, ref_stems) {
+  pairs <- greedy_alignment(cand, ref)
+  cand_free <- setdiff(seq_along(cand), pairs[, "i"])
+  ref_free <- setdiff(seq_along(ref), pairs[, "j"])
+
+  if (length(cand_free) > 0 && length(ref_free) > 0) {
+    stem_pairs <- greedy_alignment(cand_stems[cand_free], ref_stems[ref_free])
+    if (nrow(stem_pairs) > 0) {
+      pairs <- rbind(pairs, cbind(
+        i = cand_free[stem_pairs[, "i"]],
+        j = ref_free[stem_pairs[, "j"]]
+      ))
+    }
+  }
+
+  pairs[order(pairs[, "i"]), , drop = FALSE]
 }
 
 # Number of maximal runs in an (i, j) alignment matrix where both indices

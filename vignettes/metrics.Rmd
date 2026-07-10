@@ -1,0 +1,334 @@
+---
+title: "The metrics, and what they are validated against"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The metrics, and what they are validated against}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| label: knitr-setup
+#| include: false
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+#| label: setup
+#| message: false
+library(ditto)
+```
+
+A similarity metric is only useful if it computes what its name says it does.
+BLEU, CHRF, ROUGE, TER, and METEOR are all published metrics with widely used
+reference implementations, so `ditto`'s versions can be checked against them
+rather than merely tested for plausibility. This vignette records what each
+metric is checked against, under what settings, and where `ditto` knowingly
+departs from the reference.
+
+The short answer: every metric `ditto` implements from scratch is validated
+against an external implementation, and the departures are deliberate, few, and
+listed below.
+
+## What ditto computes
+
+Three of the columns `compare_strings()` returns are not `ditto`'s own work at
+all: `levenshtein`, `jaccard`, and `cosine` come from
+[`stringdist`](https://github.com/markvanderloo/stringdist), which is where the
+question of validating them belongs. The rest are implemented here.
+
+```{r}
+#| label: metric-table
+#| echo: false
+metrics <- tibble::tribble(
+  ~Metric,            ~Function,               ~`Validated against`,
+  "BLEU",             "bleu()",                "sacrebleu",
+  "CHRF",             "chrf()",                "sacrebleu",
+  "ROUGE-1/2/L",      "rouge()",               "rouge-score (Google)",
+  "TER",              "ter()",                 "sacrebleu",
+  "Word error rate",  "wer()",                 "jiwer",
+  "METEOR",           "meteor()",              "nltk",
+  "BERTScore",        "bertscore()",           "bert-score (original authors)",
+  "Embedding cosine", "cosine_similarity()",   "not validated",
+  "Levenshtein, Jaccard, character cosine", "compare_strings()", "delegated to stringdist"
+)
+knitr::kable(metrics)
+```
+
+`cosine_similarity()` is the one gap. It is the cosine between two pooled
+embedding vectors, which has no reference implementation to disagree with: once
+the embeddings and the pooling are fixed, the arithmetic is a one-liner. The
+embeddings themselves are exercised through `bertscore()`, which *is* validated.
+
+## What has to match
+
+Two implementations agree only when they are asked for the same quantity. Each
+reference below is configured to compute exactly what `ditto` computes; these
+are the settings that matter.
+
+**Tokenization**, first, because it underlies everything else. `ditto`'s word
+metrics split on whitespace and peel punctuation into its own token, following
+TER's original convention and `sacrebleu`'s `13a` tokenizer. Every reference is
+either handed text already tokenized this way, or told to use that tokenizer, so
+no disagreement can be blamed on tokenization.
+
+`bleu()` is checked against `sacrebleu`'s `BLEU` with `smooth_method="none"`
+(`ditto` applies no smoothing), `effective_order=True`, and `tokenize="none"`
+so `sacrebleu` accepts the pre-tokenized text.
+
+`chrf()` is checked against `sacrebleu`'s `CHRF` with `char_order=6`, `beta=2`,
+`word_order=0` (plain CHRF, not chrF++), `whitespace=False`, and no epsilon
+smoothing. These are `sacrebleu`'s defaults and `ditto`'s.
+
+`rouge()` is checked against Google's `rouge_score` with `use_stemmer=False`,
+since `rouge()` does not stem, and its F-measure corresponds to `ditto`'s
+default `beta = 1`.
+
+`ter()` is checked against `sacrebleu`'s `TER` with `case_sensitive=True`,
+because `ditto` compares the text as given while `sacrebleu` lowercases by
+default. With `normalized=False` and `no_punct=False`, `sacrebleu`'s tokenizer
+then only collapses whitespace, so the pre-tokenized text passes through
+untouched.
+
+`wer()` is checked against `jiwer`'s word error rate on the same tokens. It is
+`ter()` without the shift search, so word error rate is the right reference for
+it, and the two functions bracket what a reordering ought to cost.
+
+`meteor()` is checked against `nltk` with the Snowball English stemmer (the
+stemmer behind `SnowballC::wordStem()`, not `nltk`'s default Porter stemmer), a
+stubbed WordNet that disables the synonym stage `ditto` omits, and
+`alpha=0.9, beta=3, gamma=0.5`, which is exactly `ditto`'s
+`f_mean = 10PR / (R + 9P)` and `penalty = 0.5 * (chunks / matches)^3`.
+
+`bertscore()` has its own vignette, `vignette("bertscore-validation")`, because
+it is the only metric that needs a model server on both sides.
+
+## The comparison
+
+The scores below were produced by the reference implementations under those
+settings. `ditto` recomputes the same pairs when this vignette is built, so the
+agreement is checked afresh rather than asserted.
+
+```{r}
+#| label: reference-scores
+reference <- tibble::tribble(
+  ~candidate, ~reference, ~bleu, ~chrf, ~rouge_1, ~rouge_2, ~rouge_l, ~ter, ~wer, ~meteor,
+  "the cat sat on the mat", "the cat sat on the mat",
+  1.0000000, 1.0000000, 1.0000000, 1.0000000, 1.0000000, 0.0000000, 0.0000000, 0.9976852,
+  "the cat sat on the mat", "a cat was sitting on the mat",
+  0.0000000, 0.3722543, 0.6153846, 0.3636364, 0.6153846, 0.4285714, 0.4285714, 0.5434783,
+  "how much do you agree with the statement", "to what extent do you agree with the statement",
+  0.6004288, 0.6985244, 0.7058824, 0.6666667, 0.7058824, 0.3333333, 0.3333333, 0.6725968,
+  "b a c d", "a b c d",
+  0.0000000, 0.3333333, 1.0000000, 0.3333333, 0.7500000, 0.2500000, 0.5000000, 0.7890625,
+  "d e f a b c", "a b c d e f",
+  0.0000000, 0.3833333, 1.0000000, 0.8000000, 0.5000000, 0.1666667, 1.0000000, 0.9814815,
+  "she walked slowly to the store", "slowly she walked to the shop",
+  0.0000000, 0.6141196, 0.8333333, 0.4000000, 0.6666667, 0.3333333, 0.5000000, 0.7433333,
+  "i went the market to buy bread", "i went to the market to buy bread",
+  0.6129752, 0.8530376, 0.9333333, 0.7692308, 0.9333333, 0.1250000, 0.1250000, 0.8757427,
+  "running runs runner", "run running ran",
+  0.0000000, 0.5631993, 0.3333333, 0.0000000, 0.3333333, 1.0000000, 1.0000000, 0.3333333,
+  "one two three four five", "five four three two one",
+  0.0000000, 0.5073802, 1.0000000, 0.0000000, 0.2000000, 0.8000000, 0.8000000, 0.5000000,
+  "do you agree with this statement.", "do you agree with this statement?",
+  0.8091067, 0.9606070, 0.8571429, 0.8333333, 0.8571429, 0.1428571, 0.1428571, 0.8551587
+)
+```
+
+```{r}
+#| label: ditto-scores
+pairwise <- function(f, ...) {
+  mapply(f, reference$candidate, reference$reference,
+    MoreArgs = list(...), USE.NAMES = FALSE
+  )
+}
+
+ours <- tibble::tibble(
+  bleu = pairwise(bleu),
+  chrf = pairwise(chrf),
+  rouge_1 = pairwise(rouge, variant = "1"),
+  rouge_2 = pairwise(rouge, variant = "2"),
+  rouge_l = pairwise(rouge, variant = "l"),
+  ter = pairwise(ter),
+  wer = pairwise(wer),
+  meteor = pairwise(meteor)
+)
+```
+
+The largest disagreement on any pair, for each metric:
+
+```{r}
+#| label: agreement
+#| echo: false
+theirs <- reference[names(ours)]
+largest <- vapply(names(ours), function(m) max(abs(ours[[m]] - theirs[[m]])), numeric(1))
+
+knitr::kable(
+  tibble::tibble(
+    metric = names(largest),
+    `largest difference` = format(largest, digits = 2, scientific = TRUE)
+  )
+)
+```
+
+Every metric agrees to within about `1e-7`, which is the rounding in the table
+above rather than a real difference; the validation scripts, which carry full
+precision, agree to about `1e-11`. The scores themselves are worth a glance too,
+because they show the metrics disagreeing with each other in exactly the ways
+they are designed to:
+
+```{r}
+#| label: score-table
+#| echo: false
+knitr::kable(cbind(pair = seq_len(nrow(ours)), round(ours, 3)))
+```
+
+Pair 2 is a paraphrase that shares no 4-gram, so BLEU is 0 while ROUGE-1 is
+0.62. Pair 5 (`d e f a b c` against `a b c d e f`) is one block of three words
+moved: TER charges a single shift for 0.17, while word error rate rewrites every
+word for 1.0. Pair 8 (`running runs runner`) matches only by stem, so BLEU and
+ROUGE-2 are 0 while METEOR is 0.33. Pair 9 is a pure reversal: every word is
+present, so ROUGE-1 is a perfect 1.0, while ROUGE-L collapses to 0.2 and both
+error rates climb to 0.8 — no contiguous block can be moved to fix a reversal.
+A single metric would have hidden each of these.
+
+## TER and word error rate
+
+TER counts a contiguous block of words moved to a new position as a single
+edit, a *shift*. Finding the cheapest set of shifts is NP-complete (Shapira &
+Storer, 2002), so TER's original implementation, TERCOM, searches greedily:
+apply the shift that most reduces the edit distance, repeat until none helps.
+`ter()` reproduces that search, closely enough to return `sacrebleu`'s score.
+
+`wer()` is the same edit rate without shifts. Together they bracket what a
+reordering costs, which is often the more informative reading:
+
+```{r}
+#| label: ter-vs-wer
+c(ter = ter("she walked slowly to the store", "slowly she walked to the shop"),
+  wer = wer("she walked slowly to the store", "slowly she walked to the shop"))
+```
+
+Moving `"slowly"` is one edit for TER and two for word error rate. `ter()` costs
+more to compute, since the shift search rescores the sentence for every
+candidate shift; on sentence-length inputs this is milliseconds, but it is not
+free the way `wer()` is.
+
+## Known departures
+
+Two, both deliberate.
+
+**`bleu()` caps its n-gram order at the shorter string.** `sacrebleu`'s
+`effective_order` caps at the *candidate's* length. The two coincide unless the
+reference is the shorter side and has fewer than four tokens, where `sacrebleu`
+scores the impossible orders as 0 and returns 0, while `ditto` evaluates the
+orders that are actually possible and returns a non-zero score. This keeps short
+survey items from all collapsing to 0, at the cost of departing from
+`sacrebleu` there.
+
+```{r}
+#| label: bleu-departure
+bleu("a b c d e", "a b") # sacrebleu returns 0
+bleu("a b", "a b c d e") # candidate is shorter; both return this
+```
+
+**`meteor()` has no synonym stage.** METEOR's third matching stage uses WordNet,
+which exists for only a handful of languages. `ditto` covers exact and stem
+matching, so it agrees with `nltk` on text where no synonyms would have matched
+and scores lower where they would have. Its alignment is also a heuristic, not
+the chunk-minimal alignment the original tie-break calls for; it reproduces
+`nltk`'s right-to-left scan so the two agree, but a left-to-right scan would
+sometimes find fewer chunks.
+
+`chrf()`, `rouge()`, `ter()`, and `wer()` have no known departure. `chrf()`
+agrees with `sacrebleu` even on strings shorter than the n-gram order, where
+`ditto`'s cap coincides with `sacrebleu`'s effective-order handling. `ter()`
+agrees with `sacrebleu` on sentences long enough that its beam search prunes
+the edit-distance matrix, not only on short ones where the beam is inactive.
+
+## Reproducing this
+
+The comparison is not run when the vignette is built, since it needs Python.
+Two scripts in `dev/validation/` regenerate it:
+
+```sh
+pip install sacrebleu rouge-score jiwer nltk
+python dev/validation/text-metrics-reference.py   # writes the reference scores
+Rscript dev/validation/text-metrics-ditto.R       # scores the same pairs, diffs them
+```
+
+The R script stops with an error if any validated metric drifts from its
+reference, and reports how often `ter()` beats `wer()`, so a silently broken
+shift search cannot pass as word error rate. `bertscore-reference.py` and
+`bertscore-ditto.R` do the same for BERTScore, which additionally needs a
+running `llama.cpp` server.
+
+## Other implementations
+
+Worth knowing what else exists, in R and elsewhere.
+
+**In R the coverage is thin.**
+[`sacRebleu`](https://cran.r-project.org/package=sacRebleu) is the only CRAN
+package covering any of these metrics, and despite its name it implements BLEU
+only, in C++, with the smoothing methods of Chen and Cherry (2014).
+[`rougeR`](https://github.com/LJCovingtonJr/rougeR) is GitHub-only and covers
+ROUGE-N and ROUGE-S, with ROUGE-L listed as in development.
+[`wersim`](https://rdrr.io/github/jenswaeckerle/wersim/man/wer.html) is
+GitHub-only and computes word error rate. The
+[`text`](https://cran.r-project.org/package=text) package gives you transformer
+embeddings and a `textSimilarity()`, but not BERTScore's token-matching
+formulation. No CRAN package appears to implement CHRF, METEOR, TER, or
+BERTScore, which is the gap `ditto` fills.
+
+**In Python they are all well covered**, which is what made the validation
+possible.
+
+```{r}
+#| label: python-table
+#| echo: false
+knitr::kable(tibble::tribble(
+  ~Library,            ~Covers,
+  "sacrebleu",         "BLEU, CHRF, chrF++, TER",
+  "nltk",              "BLEU, METEOR, RIBES",
+  "rouge-score",       "ROUGE-1/2/L/Lsum",
+  "jiwer",             "WER, CER",
+  "torchmetrics.text", "BLEU, ROUGE, CHRF, TER, WER, BERTScore",
+  "evaluate",          "wrappers around most of the above",
+  "bert-score",        "BERTScore"
+))
+```
+
+One caveat on METEOR. `nltk`, which `ditto` matches score for score, is itself a
+simplification of the official Java implementation of Denkowski and Lavie, which
+performs a real alignment search and tunes its parameters per language. Matching
+`nltk` buys agreement with what people actually run, not with the paper.
+
+## References
+
+Papineni, K., Roukos, S., Ward, T., & Zhu, W.-J. (2002). BLEU: a method for
+automatic evaluation of machine translation. *Proceedings of the 40th Annual
+Meeting of the Association for Computational Linguistics*, 311-318.
+
+Popović, M. (2015). chrF: character n-gram F-score for automatic MT evaluation.
+*Proceedings of the Tenth Workshop on Statistical Machine Translation*, 392-395.
+
+Lin, C.-Y. (2004). ROUGE: A package for automatic evaluation of summaries.
+*Text Summarization Branches Out*, 74-81.
+
+Snover, M., Dorr, B., Schwartz, R., Micciulla, L., & Makhoul, J. (2006). A study
+of translation edit rate with targeted human annotation. *Proceedings of the 7th
+Conference of the Association for Machine Translation in the Americas*, 223-231.
+
+Shapira, D., & Storer, J. A. (2002). Edit distance with move operations.
+*Proceedings of the 13th Annual Symposium on Combinatorial Pattern Matching*,
+85-98.
+
+Banerjee, S., & Lavie, A. (2005). METEOR: An automatic metric for MT evaluation
+with improved correlation with human judgments. *Proceedings of the ACL Workshop
+on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or
+Summarization*, 65-72.
+
+Zhang, T., Kishore, V., Wu, F., Weinberger, K. Q., & Artzi, Y. (2020).
+BERTScore: Evaluating text generation with BERT. *International Conference on
+Learning Representations (ICLR)*.

@@ -14,7 +14,7 @@ bleu(candidate, reference, max_n = 4)
 \item{max_n}{Maximum n-gram order to consider (default 4).}
 }
 \value{
-A BLEU score between 0 and 1.
+A BLEU score between 0 and 1, or \code{NA} if either input is \code{NA}.
 }
 \description{
 Computes a sentence-level BLEU score for a candidate string against a
@@ -30,6 +30,9 @@ identical, and 0 when any n-gram order has no matching n-grams, which makes
 BLEU strict on word order. Scores are most meaningful for full sentences;
 on very short strings there are few n-grams to aggregate, so scores are
 noisier.
+
+Words are tokenized as in \code{\link[=ter]{ter()}}: whitespace separates tokens, and
+punctuation becomes a token of its own. A string with no words scores 0.
 }
 \examples{
 bleu(

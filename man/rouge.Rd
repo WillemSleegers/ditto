@@ -17,7 +17,7 @@ rouge(candidate, reference, variant = c("1", "2", "l"), beta = 1)
 \item{beta}{Weight of recall relative to precision (default 1).}
 }
 \value{
-A ROUGE score between 0 and 1.
+A ROUGE score between 0 and 1, or \code{NA} if either input is \code{NA}.
 }
 \description{
 Computes a ROUGE score for a candidate string against a reference. ROUGE
@@ -36,6 +36,10 @@ is obtained by encoding each word as a single character and reusing
 \code{\link[stringdist:stringdist]{stringdist::stringdist()}}'s \code{"lcs"} method, which returns an edit
 distance under insertions and deletions only; the LCS length is
 \code{(length(candidate) + length(reference) - distance) / 2}.
+
+Words are tokenized as in \code{\link[=ter]{ter()}}: whitespace separates tokens, and
+punctuation becomes a token of its own. A string with no words scores 0,
+since there are no n-grams to match.
 }
 \examples{
 rouge("the cat sat on the mat", "a cat was sitting on the mat")
