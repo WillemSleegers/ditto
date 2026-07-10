@@ -139,7 +139,9 @@ PAIRS = [
 
 out = Path(__file__).parent / "text_metrics_reference_scores.csv"
 with out.open("w", newline="", encoding="utf-8") as fh:
-    writer = csv.writer(fh)
+    # csv.writer defaults to CRLF line endings. The repo stores CSVs with LF
+    # (see .gitattributes), so ask for LF rather than let git rewrite the file.
+    writer = csv.writer(fh, lineterminator="\n")
     writer.writerow(
         ["candidate", "reference", "bleu", "chrf", "rouge_1", "rouge_2", "rouge_l",
          "ter", "wer", "meteor"]

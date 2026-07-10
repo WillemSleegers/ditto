@@ -36,7 +36,12 @@ scores <- data.frame(
   wer = pairwise(wer),
   meteor = pairwise(meteor)
 )
-write.csv(scores, file.path(here, "text_metrics_ditto_scores.csv"), row.names = FALSE)
+# write.csv() opens a text-mode connection, which on Windows turns every "\n"
+# into "\r\n". The repo stores CSVs with LF (see .gitattributes), so write
+# through a binary connection instead of leaving git to rewrite the file.
+con <- file(file.path(here, "text_metrics_ditto_scores.csv"), open = "wb")
+write.csv(scores, con, row.names = FALSE)
+close(con)
 
 # bleu() caps its n-gram order at the length of the *shorter* string, whereas
 # sacrebleu's effective_order caps at the candidate's length. The two therefore

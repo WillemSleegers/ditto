@@ -45,7 +45,12 @@ ditto_scores <- as.data.frame(
 print(round(ditto_scores, 5))
 
 out_path <- file.path("dev", "validation", "ditto_scores.csv")
-write.csv(ditto_scores, out_path, row.names = FALSE)
+# write.csv() opens a text-mode connection, which on Windows turns every "\n"
+# into "\r\n". The repo stores CSVs with LF (see .gitattributes), so write
+# through a binary connection instead of leaving git to rewrite the file.
+con <- file(out_path, open = "wb")
+write.csv(ditto_scores, con, row.names = FALSE)
+close(con)
 cat("\nWrote", out_path, "\n")
 
 stop_llama_server()  # shut it down when done
