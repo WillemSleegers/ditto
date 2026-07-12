@@ -33,10 +33,10 @@
 #' Lin, C.-Y. (2004). ROUGE: A package for automatic evaluation of summaries.
 #' *Text Summarization Branches Out*, 74-81.
 #' <https://aclanthology.org/W04-1013/>
-#' @export
 #' @examples
 #' rouge("the cat sat on the mat", "a cat was sitting on the mat")
 #' rouge("the cat sat on the mat", "a cat was sitting on the mat", variant = "l")
+#' @export
 rouge <- function(candidate, reference, variant = c("1", "2", "l"), beta = 1) {
   variant <- match.arg(variant)
   if (check_pair(candidate, reference)) {

@@ -34,9 +34,9 @@
 #' Popović, M. (2015). chrF: character n-gram F-score for automatic MT
 #' evaluation. *Proceedings of the Tenth Workshop on Statistical Machine
 #' Translation*, 392-395. <https://doi.org/10.18653/v1/W15-3049>
-#' @export
 #' @examples
 #' chrf("agreeing", "agreed")
+#' @export
 chrf <- function(candidate, reference, n = 6, beta = 2) {
   if (check_pair(candidate, reference)) {
     return(NA_real_)

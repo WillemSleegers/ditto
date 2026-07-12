@@ -28,12 +28,12 @@
 #' automatic evaluation of machine translation. *Proceedings of the 40th
 #' Annual Meeting of the Association for Computational Linguistics*, 311-318.
 #' <https://doi.org/10.3115/1073083.1073135>
-#' @export
 #' @examples
 #' bleu(
 #'   "how much do you agree with the statement",
 #'   "to what extent do you agree with the statement"
 #' )
+#' @export
 bleu <- function(candidate, reference, max_n = 4) {
   if (check_pair(candidate, reference)) {
     return(NA_real_)

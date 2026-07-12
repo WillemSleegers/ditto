@@ -27,13 +27,13 @@
 #' @return A word error rate, 0 or greater, or `NA` if either input is `NA`.
 #' @seealso [ter()], which additionally counts a moved block of words as one
 #'   edit.
-#' @export
 #' @examples
 #' wer("the cat sat on the mat", "a cat was sitting on the mat")
 #'
 #' # Reordering costs a substitution per word, where ter() charges one shift.
 #' wer("b a c d", "a b c d")
 #' ter("b a c d", "a b c d")
+#' @export
 wer <- function(candidate, reference) {
   if (check_pair(candidate, reference)) {
     return(NA_real_)

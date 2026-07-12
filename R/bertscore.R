@@ -114,11 +114,11 @@ count_tokens <- function(text, host = "http://localhost:8080") {
 #' BERTScore: Evaluating text generation with BERT. *International Conference
 #' on Learning Representations (ICLR)*.
 #' <https://doi.org/10.48550/arXiv.1904.09675>
-#' @export
 #' @examples
 #' \dontrun{
 #' bertscore("how much do you agree", "to what extent do you agree")
 #' }
+#' @export
 bertscore <- function(candidate, reference, host = "http://localhost:8080",
                       prefix = "", baseline = NULL) {
   cand <- normalize_rows(token_embeddings(candidate, host = host, prefix = prefix))
@@ -157,13 +157,13 @@ bertscore <- function(candidate, reference, host = "http://localhost:8080",
 #' @return A named numeric vector with the baseline `precision`, `recall`, and
 #'   `f1`, suitable to pass as `baseline` to [bertscore()].
 #' @seealso [bertscore()], which consumes the result.
-#' @export
 #' @examples
 #' \dontrun{
 #' b <- bertscore_baseline()
 #' bertscore("how much do you agree", "to what extent do you agree",
 #'           baseline = b)
 #' }
+#' @export
 bertscore_baseline <- function(texts = NULL,
                                host = "http://localhost:8080",
                                prefix = "",
@@ -219,13 +219,13 @@ bertscore_baseline <- function(texts = NULL,
 #'   get a `baseline` for [bertscore()], e.g. `baselines[["nl"]]`.
 #' @seealso [bertscore_baseline()] for a single baseline and [bertscore()],
 #'   which consumes one.
-#' @export
 #' @examples
 #' \dontrun{
 #' baselines <- bertscore_baselines()
 #' bertscore("in hoeverre bent u het eens", "hoeveel bent u het eens",
 #'           baseline = baselines[["nl"]])
 #' }
+#' @export
 bertscore_baselines <- function(data = example_sentences,
                                 host = "http://localhost:8080",
                                 prefix = "",

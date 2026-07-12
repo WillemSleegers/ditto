@@ -39,13 +39,13 @@
 #' @seealso [bleu()], [chrf()], [rouge()], [ter()], [wer()], [meteor()],
 #'   [bertscore()], and [cosine_similarity()] for the individual metrics, and
 #'   [clean()] to normalise text before comparison.
-#' @export
 #' @examples
 #' compare_strings(
 #'   c("how much do you agree with the statement", "what is your age"),
 #'   c("to what extent do you agree with the statement",
 #'     "to what extent do you agree with the statement")
 #' )
+#' @export
 compare_strings <- function(candidate, reference, bert = FALSE, language = "en",
                             host = "http://localhost:8080", prefix = "",
                             baseline = NULL, pooling = c("mean", "cls")) {

@@ -29,7 +29,6 @@
 #' @return A single cosine similarity, between -1 and 1.
 #' @seealso [bertscore()] for the token-level counterpart and
 #'   [compare_strings()] to report this next to the other metrics.
-#' @export
 #' @examples
 #' \dontrun{
 #' cosine_similarity("how much do you agree", "to what extent do you agree")
@@ -37,6 +36,7 @@
 #' cosine_similarity("how much do you agree", "to what extent do you agree",
 #'                   pooling = "cls")
 #' }
+#' @export
 cosine_similarity <- function(candidate, reference,
                               host = "http://localhost:8080",
                               prefix = "",

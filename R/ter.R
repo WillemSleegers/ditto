@@ -45,13 +45,13 @@
 #' Shapira, D., & Storer, J. A. (2002). Edit distance with move operations.
 #' *Proceedings of the 13th Annual Symposium on Combinatorial Pattern
 #' Matching*, 85-98.
-#' @export
 #' @examples
 #' ter("the cat sat on the mat", "a cat was sitting on the mat")
 #'
 #' # A reordering is one shift, not two substitutions.
 #' ter("b a c d", "a b c d")
 #' wer("b a c d", "a b c d")
+#' @export
 ter <- function(candidate, reference) {
   if (check_pair(candidate, reference)) {
     return(NA_real_)

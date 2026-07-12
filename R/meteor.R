@@ -56,7 +56,6 @@
 #' the ACL Workshop on Intrinsic and Extrinsic Evaluation Measures for
 #' Machine Translation and/or Summarization*, 65-72.
 #' <https://aclanthology.org/W05-0909/>
-#' @export
 #' @examples
 #' meteor("the cats are agreeing", "the cat agreed")
 #'
@@ -65,6 +64,7 @@
 #'
 #' # Stemming follows the language of the text.
 #' meteor("de katten liepen", "de kat liep", language = "dutch")
+#' @export
 meteor <- function(candidate, reference, language = "en", recall_weight = 9,
                    gamma = 0.5, frag_power = 3) {
   if (check_pair(candidate, reference)) {

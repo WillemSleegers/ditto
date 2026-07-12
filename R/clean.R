@@ -7,9 +7,9 @@
 #' @param x A character vector.
 #' @return A cleaned character vector of the same length.
 #' @seealso [compare_strings()], which compares text but does not clean it.
-#' @export
 #' @examples
 #' clean("To what extent do you AGREE?")
+#' @export
 clean <- function(x) {
   x |>
     stringr::str_to_lower() |>
