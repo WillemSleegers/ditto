@@ -1,4 +1,5 @@
 # try-ditto.R ------------------------------------------------------------------
+
 # A scratch script for exploring the {ditto} package during development.
 # Run sections interactively (Ctrl/Cmd + Enter) rather than sourcing the whole
 # file, since some parts (BERTScore) need a running llama.cpp server.
@@ -56,9 +57,8 @@ list.files("vignettes") # source files in this repo
 # vignettes/metrics.Rmd               -- what each metric is validated against
 # vignettes/bertscore-validation.Rmd  -- bertscore() vs. the Python reference
 
-# Build + view a vignette from source:
-# devtools::build_vignettes()
-# rmarkdown::render("vignettes/ditto.Rmd"); browseURL("vignettes/ditto.html")
+# Knit a vignette against the source package and view the result:
+# devtools::build_rmd("vignettes/ditto.Rmd"); browseURL("vignettes/ditto.html")
 
 # 4. Text metrics --------------------------------------------------------------
 # These need no model and no server. Each takes a single candidate and a single
