@@ -201,6 +201,15 @@ Storer, 2002), so TER's original implementation, TERCOM, searches greedily:
 apply the shift that most reduces the edit distance, repeat until none helps.
 `ter()` reproduces that search, closely enough to return `sacrebleu`'s score.
 
+`sacrebleu`, specifically, and not TER in the abstract. The paper describes the
+metric but leaves the greedy shift search to the code, and there are two bodies
+of it: TERCOM, the original Java tool, and `sacrebleu`'s `lib_ter.py`, a later
+Python reimplementation. `lib_ter.py` made choices TERCOM did not — where a
+shifted block lands relative to its aligned index, for one. `ditto` ports
+`sacrebleu`, so it is two steps from the original tool. That is deliberate:
+`sacrebleu` is what current work reports. Whether the two disagree numerically
+is untested here.
+
 `wer()` is the same edit rate without shifts. Together they bracket what a
 reordering costs, which is often the more informative reading:
 
@@ -241,11 +250,18 @@ the chunk-minimal alignment the original tie-break calls for; it reproduces
 `nltk`'s right-to-left scan so the two agree, but a left-to-right scan would
 sometimes find fewer chunks.
 
-`chrf()`, `rouge()`, `ter()`, and `wer()` have no known departure. `chrf()`
-agrees with `sacrebleu` even on strings shorter than the n-gram order, where
-`ditto`'s cap coincides with `sacrebleu`'s effective-order handling. `ter()`
-agrees with `sacrebleu` on sentences long enough that its beam search prunes
-the edit-distance matrix, not only on short ones where the beam is inactive.
+`chrf()`, `rouge()`, `ter()`, and `wer()` have no known departure in what they
+compute. `chrf()` agrees with `sacrebleu` even on strings shorter than the
+n-gram order, where `ditto`'s cap coincides with `sacrebleu`'s effective-order
+handling. `ter()` agrees with `sacrebleu` on sentences long enough that its
+beam search prunes the edit-distance matrix, not only on short ones where the
+beam is inactive.
+
+`ter()` and `sacrebleu`'s `TER` *at its defaults* still disagree on text whose
+case differs: `sacrebleu` lowercases, `ditto` compares text as given, here as
+everywhere else in the package. That is a difference in configuration, not in
+computation — hence the `case_sensitive=True` above. Clean the strings first to
+match `sacrebleu`'s default.
 
 ## Reproducing this
 
