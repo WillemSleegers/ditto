@@ -5,8 +5,17 @@
 #' native `/embeddings` endpoint returns one embedding per input token rather
 #' than a single pooled vector, which is what [bertscore()] needs.
 #'
-#' The model's special tokens (added at the start and end of the sequence)
-#' are dropped by default, matching the original BERTScore definition.
+#' The model's special tokens are dropped by default, matching the original
+#' BERTScore definition. How many it adds, and whether it adds any at the end
+#' at all, is asked of the server rather than assumed: `bge-m3` wraps the
+#' content in `<s>` and `</s>`, while IBM's `granite-embedding-r2` models
+#' prepend `<bos>` and append nothing.
+#'
+#' Because the layout belongs to the model rather than to the string, it is
+#' asked once per `host` and then cached, leaving one request per embedding.
+#' [start_llama_server()] and [stop_llama_server()] clear the cache, and it is
+#' also discarded whenever the embedding dimension changes, so swapping models
+#' cannot leave a stale layout behind.
 #'
 #' @details
 #' Ollama and LM Studio expose only pooled, OpenAI-style embedding endpoints
@@ -25,8 +34,10 @@
 #' @param prefix Optional task prefix required by some models (e.g. `"query: "`).
 #'   Prepended before embedding and stripped from the returned rows. Default
 #'   `""` (no prefix).
-#' @param drop_special Whether to drop the first and last token rows, which
-#'   correspond to the model's special tokens. Default `TRUE`.
+#' @param drop_special Whether to drop the rows holding the model's special
+#'   tokens. How many sit at each end is determined from the server's
+#'   `/tokenize` endpoint, so a model that adds only a leading token keeps its
+#'   final content token. Default `TRUE`.
 #' @return A numeric matrix with one row per token and one column per
 #'   embedding dimension.
 #' @seealso [bertscore()], which builds on these embeddings.
@@ -35,10 +46,16 @@ token_embeddings <- function(text,
                              host = "http://localhost:8080",
                              prefix = "",
                              drop_special = TRUE) {
-  mat <- embed_raw(paste0(prefix, text), host = host)
+  full <- paste0(prefix, text)
+  mat <- embed_raw(full, host = host)
 
-  if (drop_special && nrow(mat) > 2) {
-    mat <- mat[-c(1, nrow(mat)), , drop = FALSE]
+  if (drop_special) {
+    n <- special_token_counts(full, host = host, ndim = ncol(mat))
+    first <- n[["lead"]] + 1L
+    last <- nrow(mat) - n[["trail"]]
+    if (last >= first) {
+      mat <- mat[first:last, , drop = FALSE]
+    }
   }
 
   # Drop the prefix's own tokens, which now sit at the start of the matrix.
@@ -66,14 +83,86 @@ embed_raw <- function(text, host = "http://localhost:8080") {
   do.call(rbind, lapply(rows, function(v) as.numeric(unlist(v))))
 }
 
-# Number of tokens a string occupies, excluding special tokens, via the
+# Token ids for `text`, with or without the model's special tokens, via the
 # server's /tokenize endpoint.
-count_tokens <- function(text, host = "http://localhost:8080") {
+tokenize_ids <- function(text, host = "http://localhost:8080",
+                         add_special = FALSE) {
   resp <- httr2::request(host) |>
     httr2::req_url_path("/tokenize") |>
-    httr2::req_body_json(list(content = text, add_special = FALSE)) |>
+    httr2::req_body_json(list(content = text, add_special = add_special)) |>
     httr2::req_perform()
-  length(httr2::resp_body_json(resp, simplifyVector = FALSE)$tokens)
+  tokens <- httr2::resp_body_json(resp, simplifyVector = FALSE)$tokens
+  vapply(tokens, as.integer, integer(1))
+}
+
+# Number of tokens a string occupies, excluding special tokens.
+count_tokens <- function(text, host = "http://localhost:8080") {
+  length(tokenize_ids(text, host = host, add_special = FALSE))
+}
+
+# Cached special-token layout, one entry per host. The layout is a property of
+# the model rather than of the string, so it is derived once and reused; the
+# entry also records the embedding dimension it was derived at.
+.ditto_specials <- new.env(parent = emptyenv())
+
+# Forget every cached layout. Called by start_llama_server() and
+# stop_llama_server(), which between them cover every way the model behind a
+# host can change from within R.
+forget_special_tokens <- function() {
+  rm(list = ls(.ditto_specials), envir = .ditto_specials)
+  invisible(NULL)
+}
+
+# How many special tokens the model puts before and after the content tokens.
+# Asked of the server rather than assumed, because models disagree: bge-m3
+# wraps the content in <s> and </s>, while granite-embedding-r2 prepends <bos>
+# and appends nothing. Dropping a fixed row at each end would discard a real
+# token on the latter -- and it is the final token, often the one carrying the
+# most meaning.
+#
+# The answer is cached per host, so the two /tokenize round-trips are paid once
+# rather than on every embedding. `ndim` is the embedding dimension the caller
+# just saw, which comes free with the embeddings response: if it no longer
+# matches, a different model is serving this host and the layout is re-derived.
+special_token_counts <- function(text, host = "http://localhost:8080",
+                                 ndim = NULL) {
+  if (!is.null(ndim) && exists(host, envir = .ditto_specials, inherits = FALSE)) {
+    cached <- get(host, envir = .ditto_specials, inherits = FALSE)
+    if (identical(cached[["ndim"]], as.integer(ndim))) {
+      return(cached[c("lead", "trail")])
+    }
+  }
+
+  counts <- special_span(
+    tokenize_ids(text, host = host, add_special = TRUE),
+    tokenize_ids(text, host = host, add_special = FALSE)
+  )
+
+  if (!is.null(ndim)) {
+    assign(host, c(counts, ndim = as.integer(ndim)), envir = .ditto_specials)
+  }
+  counts
+}
+
+# Locate the content tokens within the sequence the model actually embeds, and
+# report how many tokens sit on either side of them.
+special_span <- function(with_special, without_special) {
+  n_extra <- length(with_special) - length(without_special)
+  if (n_extra <= 0) {
+    return(c(lead = 0L, trail = 0L))
+  }
+
+  for (lead in seq.int(0L, n_extra)) {
+    if (identical(with_special[lead + seq_along(without_special)],
+                  without_special)) {
+      return(c(lead = lead, trail = n_extra - lead))
+    }
+  }
+
+  # The content tokens do not appear verbatim, which a tokenizer that splits
+  # differently once specials are added could cause. Fall back to the
+  # conventional one special at each end.
+  c(lead = 1L, trail = n_extra - 1L)
 }
 
 #' Compute a BERTScore

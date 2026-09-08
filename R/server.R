@@ -74,6 +74,10 @@ start_llama_server <- function(model = NULL,
          "Install it with install.packages(\"processx\").", call. = FALSE)
   }
 
+  # A new server may serve a different model, so the cached special-token
+  # layout from the previous one must not be reused.
+  forget_special_tokens()
+
   exe <- exe %||% getOption("ditto.llama_server") %||%
     nzchar_or_null(Sys.getenv("DITTO_LLAMA_SERVER")) %||% "llama-server"
   model <- model %||% getOption("ditto.llama_model") %||%
@@ -133,6 +137,8 @@ start_llama_server <- function(model = NULL,
 #' @rdname llama_server
 #' @export
 stop_llama_server <- function() {
+  forget_special_tokens()
+
   proc <- .ditto_server$process
   if (is.null(proc) || !proc$is_alive()) {
     message("No llama.cpp server started by ditto is running.")

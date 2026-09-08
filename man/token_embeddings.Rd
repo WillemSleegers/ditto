@@ -20,8 +20,10 @@ token_embeddings(
 Prepended before embedding and stripped from the returned rows. Default
 \code{""} (no prefix).}
 
-\item{drop_special}{Whether to drop the first and last token rows, which
-correspond to the model's special tokens. Default \code{TRUE}.}
+\item{drop_special}{Whether to drop the rows holding the model's special
+tokens. How many sit at each end is determined from the server's
+\verb{/tokenize} endpoint, so a model that adds only a leading token keeps its
+final content token. Default \code{TRUE}.}
 }
 \value{
 A numeric matrix with one row per token and one column per
@@ -34,8 +36,17 @@ native \verb{/embeddings} endpoint returns one embedding per input token rather
 than a single pooled vector, which is what \code{\link[=bertscore]{bertscore()}} needs.
 }
 \details{
-The model's special tokens (added at the start and end of the sequence)
-are dropped by default, matching the original BERTScore definition.
+The model's special tokens are dropped by default, matching the original
+BERTScore definition. How many it adds, and whether it adds any at the end
+at all, is asked of the server rather than assumed: \code{bge-m3} wraps the
+content in \verb{<s>} and \verb{</s>}, while IBM's \code{granite-embedding-r2} models
+prepend \verb{<bos>} and append nothing.
+
+Because the layout belongs to the model rather than to the string, it is
+asked once per \code{host} and then cached, leaving one request per embedding.
+\code{\link[=start_llama_server]{start_llama_server()}} and \code{\link[=stop_llama_server]{stop_llama_server()}} clear the cache, and it is
+also discarded whenever the embedding dimension changes, so swapping models
+cannot leave a stale layout behind.
 
 Ollama and LM Studio expose only pooled, OpenAI-style embedding endpoints
 that return a single vector per string, so they cannot be used here. Start

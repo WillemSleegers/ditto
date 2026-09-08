@@ -67,3 +67,136 @@ test_that("bertscore_baselines validates the required columns", {
     "missing column"
   )
 })
+
+test_that("special_span finds a leading and a trailing special token", {
+  # bge-m3 wraps the content in <s> and </s>.
+  expect_equal(
+    special_span(c(0L, 5L, 6L, 7L, 2L), c(5L, 6L, 7L)),
+    c(lead = 1L, trail = 1L)
+  )
+})
+
+test_that("special_span finds a leading special with nothing after it", {
+  # granite-embedding-r2 prepends <bos> and appends nothing.
+  expect_equal(
+    special_span(c(2L, 5L, 6L, 7L), c(5L, 6L, 7L)),
+    c(lead = 1L, trail = 0L)
+  )
+})
+
+test_that("special_span handles a trailing special and no specials at all", {
+  expect_equal(
+    special_span(c(5L, 6L, 7L, 2L), c(5L, 6L, 7L)),
+    c(lead = 0L, trail = 1L)
+  )
+  expect_equal(
+    special_span(c(5L, 6L, 7L), c(5L, 6L, 7L)),
+    c(lead = 0L, trail = 0L)
+  )
+})
+
+test_that("special_span prefers the leading match when the ids are ambiguous", {
+  # The content itself starts with the id used as the special token, so both
+  # lead = 1 and trail = 1 align. The leading one is the right reading.
+  expect_equal(
+    special_span(c(2L, 2L, 5L), c(2L, 5L)),
+    c(lead = 1L, trail = 0L)
+  )
+})
+
+test_that("special_span falls back to one at each end when nothing aligns", {
+  expect_equal(
+    special_span(c(9L, 8L, 7L), c(1L, 2L)),
+    c(lead = 1L, trail = 0L)
+  )
+})
+
+test_that("token_embeddings keeps the last token when no trailing special exists", {
+  forget_special_tokens()
+
+  # Four rows: a leading special and three content tokens. Dropping a fixed row
+  # at each end would discard the final content token.
+  mat <- matrix(as.numeric(1:8), nrow = 4)
+
+  local_mocked_bindings(
+    embed_raw = function(text, host = "http://localhost:8080") mat,
+    tokenize_ids = function(text, host = "http://localhost:8080",
+                            add_special = FALSE) {
+      if (add_special) c(2L, 5L, 6L, 7L) else c(5L, 6L, 7L)
+    }
+  )
+
+  expect_equal(token_embeddings("a b c"), mat[2:4, , drop = FALSE])
+  expect_equal(token_embeddings("a b c", drop_special = FALSE), mat)
+})
+
+test_that("token_embeddings drops both specials on a model that adds both", {
+  forget_special_tokens()
+
+  mat <- matrix(as.numeric(1:10), nrow = 5)
+
+  local_mocked_bindings(
+    embed_raw = function(text, host = "http://localhost:8080") mat,
+    tokenize_ids = function(text, host = "http://localhost:8080",
+                            add_special = FALSE) {
+      if (add_special) c(0L, 5L, 6L, 7L, 2L) else c(5L, 6L, 7L)
+    }
+  )
+
+  expect_equal(token_embeddings("a b c"), mat[2:4, , drop = FALSE])
+})
+
+test_that("the special-token layout is derived once per host and then cached", {
+  forget_special_tokens()
+  mat <- matrix(as.numeric(1:8), nrow = 4)
+  calls <- 0L
+
+  local_mocked_bindings(
+    embed_raw = function(text, host = "http://localhost:8080") mat,
+    tokenize_ids = function(text, host = "http://localhost:8080",
+                            add_special = FALSE) {
+      calls <<- calls + 1L
+      if (add_special) c(2L, 5L, 6L, 7L) else c(5L, 6L, 7L)
+    }
+  )
+
+  # One /tokenize with special tokens and one without, to derive the layout.
+  token_embeddings("a b c")
+  expect_equal(calls, 2L)
+
+  # A second string reuses it, so the embeddings call is the only round trip.
+  token_embeddings("d e f")
+  expect_equal(calls, 2L)
+
+  forget_special_tokens()
+  token_embeddings("a b c")
+  expect_equal(calls, 4L)
+})
+
+test_that("a changed embedding dimension re-derives the cached layout", {
+  forget_special_tokens()
+  ncols <- 2L
+  calls <- 0L
+
+  local_mocked_bindings(
+    embed_raw = function(text, host = "http://localhost:8080") {
+      matrix(as.numeric(seq_len(4 * ncols)), nrow = 4)
+    },
+    tokenize_ids = function(text, host = "http://localhost:8080",
+                            add_special = FALSE) {
+      calls <<- calls + 1L
+      if (add_special) c(2L, 5L, 6L, 7L) else c(5L, 6L, 7L)
+    }
+  )
+
+  token_embeddings("a b c")
+  expect_equal(calls, 2L)
+
+  # A different model is now answering at this host. Its embeddings are a
+  # different width, which is visible for free in the response.
+  ncols <- 3L
+  token_embeddings("a b c")
+  expect_equal(calls, 4L)
+
+  forget_special_tokens()
+})

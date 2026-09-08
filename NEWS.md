@@ -27,7 +27,13 @@
   input is `NA`.
 * `bertscore()` and `token_embeddings()` compute token-level semantic
   similarity from per-token embeddings served by a local `llama.cpp` server
-  started with `--pooling none`.
+  started with `--pooling none`. `token_embeddings()` determines how many
+  special tokens the model adds at each end from the server's `/tokenize`
+  endpoint rather than dropping a fixed row at each end, so models that add
+  only a leading token, such as IBM's `granite-embedding-r2`, keep their final
+  content token. The layout is cached per host, so this costs no extra requests
+  once derived; `start_llama_server()` and `stop_llama_server()` clear the
+  cache, as does a change in the embedding dimension.
 * `compare_strings()` returns Levenshtein, Jaccard, cosine, BLEU, CHRF,
   ROUGE-1, ROUGE-L, TER, WER, and METEOR scores in one table, with optional
   BERTScore F1 and embedding cosine columns.

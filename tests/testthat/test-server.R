@@ -37,6 +37,20 @@ test_that("find_llama_server returns NULL when nothing is found", {
   expect_true(is.null(result) || file.exists(result))
 })
 
+test_that("the server lifecycle functions clear the special-token cache", {
+  host <- "http://127.0.0.1:59327"
+  assign(host, c(lead = 1L, trail = 1L, ndim = 8L), envir = .ditto_specials)
+
+  # No server was started by ditto, so this only clears the cache.
+  suppressMessages(stop_llama_server())
+  expect_false(exists(host, envir = .ditto_specials, inherits = FALSE))
+
+  # Starting one clears it too, before it gets as far as resolving the model.
+  assign(host, c(lead = 1L, trail = 1L, ndim = 8L), envir = .ditto_specials)
+  expect_error(start_llama_server(model = "does-not-exist.gguf"))
+  expect_false(exists(host, envir = .ditto_specials, inherits = FALSE))
+})
+
 test_that("llama_server_running is FALSE when nothing is listening", {
   # An unlikely-to-be-used port; the request fails fast and returns FALSE.
   expect_false(llama_server_running("http://127.0.0.1:59327"))
@@ -66,6 +80,15 @@ test_that("a real server can be started, queried, and stopped", {
   )
   expect_named(score, c("precision", "recall", "f1"))
   expect_true(all(score >= 0 & score <= 1))
+
+  # Every content token keeps a row. The special tokens are trimmed by asking
+  # the server how many it adds at each end, so a model that adds only a
+  # leading one (granite-embedding-r2) does not lose its final token.
+  text <- "to what extent do you agree"
+  expect_equal(
+    nrow(token_embeddings(text, host = host)),
+    count_tokens(text, host = host)
+  )
 
   # Baseline estimation returns a sane named vector, and rescaling against it
   # lowers a score (the floor is positive).
