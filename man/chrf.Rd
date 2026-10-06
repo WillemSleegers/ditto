@@ -4,7 +4,13 @@
 \alias{chrf}
 \title{Compute a CHRF score}
 \usage{
-chrf(candidate, reference, n = 6, beta = 2)
+chrf(
+  candidate,
+  reference,
+  n = 6,
+  beta = 2,
+  measure = c("f", "recall", "precision")
+)
 }
 \arguments{
 \item{candidate}{A single candidate string.}
@@ -14,7 +20,11 @@ chrf(candidate, reference, n = 6, beta = 2)
 \item{n}{Maximum character n-gram order to consider (default 6).}
 
 \item{beta}{Weight of recall relative to precision (default 2, the
-standard CHRF setting).}
+standard CHRF setting). A single non-negative number; \code{Inf} gives recall
+and \code{0} gives precision. Ignored unless \code{measure = "f"}.}
+
+\item{measure}{What to return: \code{"f"} (the F-score, the default),
+\code{"recall"}, or \code{"precision"}.}
 }
 \value{
 A CHRF score between 0 and 1, or \code{NA} if either input is \code{NA}.
@@ -28,8 +38,11 @@ words with the reference can still share most of its character n-grams.
 }
 \details{
 Precision and recall are computed separately for every n-gram order from 1
-to \code{n} and averaged, then combined into an F-score that weights recall
-\code{beta} times as much as precision.
+to \code{n} and averaged. By default the two averages are combined into an
+F-score that weights recall \code{beta} times as much as precision; \code{beta = Inf}
+gives the averaged recall and \code{beta = 0} the averaged precision.
+\code{measure = "recall"} and \code{measure = "precision"} return those averages
+directly.
 
 Whitespace is removed before the strings are split into characters, as in
 Popović (2015) and the reference \code{sacrebleu} implementation, so a character
@@ -44,6 +57,7 @@ A string with no characters after whitespace is removed scores 0.
 }
 \examples{
 chrf("agreeing", "agreed")
+chrf("agreeing", "agreed", measure = "recall")
 }
 \references{
 Popović, M. (2015). chrF: character n-gram F-score for automatic MT

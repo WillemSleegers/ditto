@@ -7,8 +7,14 @@
   and a brevity penalty.
 * `chrf()` computes a character n-gram F-score. Whitespace is removed before
   the character n-grams are extracted, as in the reference implementation.
-  Scores agree with `sacrebleu`'s CHRF.
-* `rouge()` computes ROUGE-1, ROUGE-2, and ROUGE-L.
+  Scores agree with `sacrebleu`'s CHRF. Its `measure` argument returns the
+  F-score (the default), or the recall or precision averaged over n-gram
+  orders. In the F-score, `beta = Inf` gives recall rather than `NaN`, and
+  `beta = 0` gives precision.
+* `rouge()` computes ROUGE-1, ROUGE-2, and ROUGE-L. Its `measure` argument
+  returns the F-score (the default), recall (ROUGE-N as Lin (2004) defines
+  it), or precision. In the F-score, `beta = Inf` gives recall rather than
+  `NaN`, and `beta = 0` gives precision.
 * `ter()` computes Translation Edit Rate, including TERCOM's greedy shift
   search, so a contiguous block of words moved elsewhere costs a single edit.
   It is an error rate rather than a similarity: 0 is a perfect match, and

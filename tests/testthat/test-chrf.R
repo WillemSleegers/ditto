@@ -76,3 +76,61 @@ test_that("a missing input gives a missing score", {
 test_that("a vector of strings errors rather than scoring only the first pair", {
   expect_error(chrf(c("ab", "cd"), c("ab", "cd")), "single string")
 })
+
+test_that("beta = Inf gives recall and beta = 0 gives precision", {
+  # Every character n-gram of "agreed" appears in "agreed today", so recall is
+  # 1 one way round and precision is 1 the other.
+  expect_equal(chrf("agreed today", "agreed", beta = Inf), 1)
+  expect_equal(chrf("agreed", "agreed today", beta = 0), 1)
+  expect_lt(chrf("agreed today", "agreed", beta = 0), 1)
+  expect_equal(chrf("abc", "xyz", beta = Inf), 0)
+  expect_equal(chrf("", "abc", beta = Inf), 0)
+  expect_identical(chrf(NA_character_, "abc", beta = Inf), NA_real_)
+})
+
+test_that("beta must be a single non-negative number", {
+  expect_error(chrf("a b", "a b", beta = -1), "non-negative")
+  expect_error(chrf("a b", "a b", beta = c(1, 2)), "non-negative")
+  expect_error(chrf("a b", "a b", beta = NA_real_), "non-negative")
+  expect_error(chrf("a b", "a b", beta = "1"), "non-negative")
+})
+
+test_that("measure returns the averaged recall or precision", {
+  # Every character n-gram of "agreed" appears in "agreed today".
+  expect_equal(chrf("agreed today", "agreed", measure = "recall"), 1)
+  expect_equal(chrf("agreed", "agreed today", measure = "precision"), 1)
+  cand <- "agreeing"
+  ref <- "agreed"
+  expect_equal(
+    chrf(cand, ref, measure = "recall"),
+    chrf(cand, ref, beta = Inf)
+  )
+  expect_equal(
+    chrf(cand, ref, measure = "precision"),
+    chrf(cand, ref, beta = 0)
+  )
+  p <- chrf(cand, ref, measure = "precision")
+  r <- chrf(cand, ref, measure = "recall")
+  expect_equal(chrf(cand, ref), 5 * p * r / (4 * p + r))
+})
+
+test_that("beta is ignored unless measure is the F-score", {
+  expect_equal(
+    chrf("agreed today", "agreed", measure = "precision", beta = Inf),
+    chrf("agreed today", "agreed", beta = 0)
+  )
+  expect_equal(chrf("agreed today", "agreed", measure = "recall", beta = 0), 1)
+})
+
+test_that("recall and precision keep the NA and empty-string cases", {
+  for (measure in c("recall", "precision")) {
+    expect_identical(chrf(NA_character_, "abc", measure = measure), NA_real_)
+    expect_equal(chrf("", "abc", measure = measure), 0)
+    expect_equal(chrf("abc", "  ", measure = measure), 0)
+    expect_equal(chrf("abc", "xyz", measure = measure), 0)
+  }
+})
+
+test_that("an unknown measure errors", {
+  expect_error(chrf("abc", "abc", measure = "accuracy"))
+})

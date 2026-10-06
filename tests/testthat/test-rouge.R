@@ -69,6 +69,73 @@ test_that("beta weights recall relative to precision", {
   )
 })
 
+test_that("measure returns recall, precision, or the F-score", {
+  # 6 of the candidate's 8 words and of the reference's 9 words match.
+  cand <- "how much do you agree with the statement"
+  ref <- "to what extent do you agree with the statement"
+  r <- 6 / 9
+  p <- 6 / 8
+  expect_equal(rouge(cand, ref, variant = "1", measure = "recall"), r)
+  expect_equal(rouge(cand, ref, variant = "1", measure = "precision"), p)
+  expect_equal(rouge(cand, ref, variant = "1"), 2 * p * r / (p + r))
+  expect_equal(rouge(cand, ref, variant = "1"), 0.7059, tolerance = 1e-4)
+})
+
+test_that("variant l recall is the LCS length over the reference length", {
+  # The LCS is "to what extent do you agree with", 7 of the reference's 9
+  # words; the moved "the statement" cannot also be matched in order.
+  cand <- "the statement to what extent do you agree with"
+  ref <- "to what extent do you agree with the statement"
+  expect_equal(rouge(cand, ref, variant = "l", measure = "recall"), 7 / 9)
+})
+
+test_that("beta = Inf gives recall and beta = 0 gives precision", {
+  cand <- "how much do you agree with the statement"
+  ref <- "to what extent do you agree with the statement"
+  for (variant in c("1", "2", "l")) {
+    expect_equal(
+      rouge(cand, ref, variant = variant, beta = Inf),
+      rouge(cand, ref, variant = variant, measure = "recall")
+    )
+    expect_equal(
+      rouge(cand, ref, variant = variant, beta = 0),
+      rouge(cand, ref, variant = variant, measure = "precision")
+    )
+  }
+})
+
+test_that("beta is ignored unless measure is the F-score", {
+  expect_equal(
+    rouge("a b c", "a b", measure = "precision", beta = Inf),
+    2 / 3
+  )
+  expect_equal(rouge("a b c", "a b", measure = "recall", beta = 0), 1)
+})
+
+test_that("beta must be a single non-negative number", {
+  expect_error(rouge("a b", "a b", beta = -1), "non-negative")
+  expect_error(rouge("a b", "a b", beta = c(1, 2)), "non-negative")
+  expect_error(rouge("a b", "a b", beta = NA_real_), "non-negative")
+  expect_error(rouge("a b", "a b", beta = "1"), "non-negative")
+})
+
+test_that("recall and precision keep the NA and empty-string cases", {
+  for (measure in c("recall", "precision")) {
+    expect_identical(rouge(NA_character_, "a b", measure = measure), NA_real_)
+    expect_identical(
+      rouge("a b", NA_character_, variant = "l", measure = measure),
+      NA_real_
+    )
+    expect_equal(rouge("", "", measure = measure), 0)
+    expect_equal(rouge("", "a b", variant = "l", measure = measure), 0)
+    expect_equal(rouge("a b", "", measure = measure), 0)
+  }
+  expect_equal(rouge("", "a b", beta = Inf), 0)
+  expect_equal(rouge("a b", "", beta = 0), 0)
+  # A one-word string has no bigrams, so variant 2's denominator is 0.
+  expect_equal(rouge("a", "a b", variant = "2", measure = "precision"), 0)
+})
+
 test_that("scores match Google's rouge-score reference implementation", {
   # rouge_scorer.RougeScorer(use_stemmer = False) with ditto's tokenizer,
   # F-measure (ditto's default beta = 1).

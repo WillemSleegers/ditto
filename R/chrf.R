@@ -8,8 +8,11 @@
 #'
 #' @details
 #' Precision and recall are computed separately for every n-gram order from 1
-#' to `n` and averaged, then combined into an F-score that weights recall
-#' `beta` times as much as precision.
+#' to `n` and averaged. By default the two averages are combined into an
+#' F-score that weights recall `beta` times as much as precision; `beta = Inf`
+#' gives the averaged recall and `beta = 0` the averaged precision.
+#' `measure = "recall"` and `measure = "precision"` return those averages
+#' directly.
 #'
 #' Whitespace is removed before the strings are split into characters, as in
 #' Popović (2015) and the reference `sacrebleu` implementation, so a character
@@ -26,7 +29,10 @@
 #' @param reference A single reference string.
 #' @param n Maximum character n-gram order to consider (default 6).
 #' @param beta Weight of recall relative to precision (default 2, the
-#'   standard CHRF setting).
+#'   standard CHRF setting). A single non-negative number; `Inf` gives recall
+#'   and `0` gives precision. Ignored unless `measure = "f"`.
+#' @param measure What to return: `"f"` (the F-score, the default),
+#'   `"recall"`, or `"precision"`.
 #' @return A CHRF score between 0 and 1, or `NA` if either input is `NA`.
 #' @seealso [bleu()] for the word n-gram, precision-only counterpart, and
 #'   [rouge()] for a recall-oriented word n-gram score.
@@ -36,8 +42,14 @@
 #' Translation*, 392-395. <https://doi.org/10.18653/v1/W15-3049>
 #' @examples
 #' chrf("agreeing", "agreed")
+#' chrf("agreeing", "agreed", measure = "recall")
 #' @export
-chrf <- function(candidate, reference, n = 6, beta = 2) {
+chrf <- function(candidate, reference, n = 6, beta = 2,
+                 measure = c("f", "recall", "precision")) {
+  measure <- match.arg(measure)
+  if (!is.numeric(beta) || length(beta) != 1L || is.na(beta) || beta < 0) {
+    stop("`beta` must be a single non-negative number.", call. = FALSE)
+  }
   if (check_pair(candidate, reference)) {
     return(NA_real_)
   }
@@ -60,6 +72,13 @@ chrf <- function(candidate, reference, n = 6, beta = 2) {
 
   p <- mean(scores["precision", ])
   r <- mean(scores["recall", ])
+  if (measure == "precision") {
+    return(p)
+  }
+  # beta = Inf would otherwise compute Inf / Inf.
+  if (measure == "recall" || is.infinite(beta)) {
+    return(r)
+  }
   if (p == 0 && r == 0) {
     return(0)
   }

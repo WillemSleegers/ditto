@@ -4,7 +4,13 @@
 \alias{rouge}
 \title{Compute a ROUGE score}
 \usage{
-rouge(candidate, reference, variant = c("1", "2", "l"), beta = 1)
+rouge(
+  candidate,
+  reference,
+  variant = c("1", "2", "l"),
+  beta = 1,
+  measure = c("f", "recall", "precision")
+)
 }
 \arguments{
 \item{candidate}{A single candidate string.}
@@ -14,7 +20,12 @@ rouge(candidate, reference, variant = c("1", "2", "l"), beta = 1)
 \item{variant}{Which ROUGE variant to compute: \code{"1"} (unigram), \code{"2"}
 (bigram), or \code{"l"} (longest common subsequence).}
 
-\item{beta}{Weight of recall relative to precision (default 1).}
+\item{beta}{Weight of recall relative to precision in the F-score (default
+1). A single non-negative number; \code{Inf} gives recall and \code{0} gives
+precision. Ignored unless \code{measure = "f"}.}
+
+\item{measure}{What to return: \code{"f"} (the F-score, the default),
+\code{"recall"}, or \code{"precision"}.}
 }
 \value{
 A ROUGE score between 0 and 1, or \code{NA} if either input is \code{NA}.
@@ -29,9 +40,13 @@ words, so a candidate and reference that share a long run of words in
 order score highly even when other words are interspersed.
 }
 \details{
-All variants combine precision and recall into an F-score weighting
-recall \code{beta} times as much as precision (\code{beta = 1}, the default, is the
-harmonic mean). The longest common subsequence length for \code{variant = "l"}
+Recall is the number of matched n-grams (or, for \code{variant = "l"}, the
+longest common subsequence length) divided by the number in the reference;
+this is ROUGE-N as Lin (2004) defines it. Precision divides by the number in
+the candidate instead. By default all variants combine the two into an
+F-score weighting recall \code{beta} times as much as precision (\code{beta = 1}, the
+default, is the harmonic mean); \code{beta = Inf} gives recall and \code{beta = 0}
+gives precision. The longest common subsequence length for \code{variant = "l"}
 is obtained by encoding each word as a single character and reusing
 \code{\link[stringdist:stringdist]{stringdist::stringdist()}}'s \code{"lcs"} method, which returns an edit
 distance under insertions and deletions only; the LCS length is
@@ -39,11 +54,13 @@ distance under insertions and deletions only; the LCS length is
 
 Words are tokenized as in \code{\link[=ter]{ter()}}: whitespace separates tokens, and
 punctuation becomes a token of its own. A string with no words scores 0,
-since there are no n-grams to match.
+since there are no n-grams to match, and so does any measure whose
+denominator is 0.
 }
 \examples{
 rouge("the cat sat on the mat", "a cat was sitting on the mat")
 rouge("the cat sat on the mat", "a cat was sitting on the mat", variant = "l")
+rouge("the cat sat on the mat", "a cat was sitting on the mat", measure = "recall")
 }
 \references{
 Lin, C.-Y. (2004). ROUGE: A package for automatic evaluation of summaries.
