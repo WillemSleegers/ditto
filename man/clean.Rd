@@ -4,10 +4,14 @@
 \alias{clean}
 \title{Clean text for comparison}
 \usage{
-clean(x)
+clean(x, decimal_mark = c(".", ","))
 }
 \arguments{
 \item{x}{A character vector.}
+
+\item{decimal_mark}{The decimal mark to keep when it appears between
+digits, either \code{"."} (the default) or \code{","}. The other mark is treated
+as ordinary punctuation, so thousands separators are removed.}
 }
 \value{
 A cleaned character vector of the same length.
@@ -15,10 +19,14 @@ A cleaned character vector of the same length.
 \description{
 Lowercases a string, removes punctuation, and collapses runs of
 whitespace, so that surface differences that are not meaningful do not
-distort similarity scores.
+distort similarity scores. A decimal mark between digits is kept, as is a
+percent sign directly after a number, so \code{"6.2\%"} stays \code{"6.2\%"} rather
+than becoming \code{"62"}. Space between a number and its percent sign is
+removed, so \code{"6.2 \%"} also becomes \code{"6.2\%"}.
 }
 \examples{
 clean("To what extent do you AGREE?")
+clean("It rose 6,2\% to 1.000", decimal_mark = ",")
 }
 \seealso{
 \code{\link[=compare_strings]{compare_strings()}}, which compares text but does not clean it.

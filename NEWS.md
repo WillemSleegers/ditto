@@ -2,7 +2,10 @@
 
 * Initial version.
 * `clean()` normalises text by lowercasing, removing punctuation, and
-  collapsing whitespace.
+  collapsing whitespace. Decimal marks between digits and percent signs after
+  numbers are kept, so `"6.2 %"` becomes `"6.2%"` rather than `"62"`. Its
+  `decimal_mark` argument sets whether `"."` (the default) or `","` is the
+  decimal mark; the other is removed as a thousands separator.
 * `bleu()` computes a sentence-level BLEU score from clipped n-gram precision
   and a brevity penalty.
 * `chrf()` computes a character n-gram F-score. Whitespace is removed before
