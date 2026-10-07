@@ -18,6 +18,10 @@
   returns the F-score (the default), recall (ROUGE-N as Lin (2004) defines
   it), or precision. In the F-score, `beta = Inf` gives recall rather than
   `NaN`, and `beta = 0` gives precision.
+* `jaccard()` computes the Jaccard similarity of the sets of words, or of
+  word n-grams with its `n` argument, in a candidate and a reference. Two
+  strings without any n-grams score 1 if their words are identical and 0
+  otherwise. Scores agree with `nltk`'s `jaccard_distance`.
 * `ter()` computes Translation Edit Rate, including TERCOM's greedy shift
   search, so a contiguous block of words moved elsewhere costs a single edit.
   It is an error rate rather than a similarity: 0 is a perfect match, and
@@ -43,11 +47,13 @@
   content token. The layout is cached per host, so this costs no extra requests
   once derived; `start_llama_server()` and `stop_llama_server()` clear the
   cache, as does a change in the embedding dimension.
-* `compare_strings()` returns Levenshtein, Jaccard, cosine, BLEU, CHRF,
-  ROUGE-1, ROUGE-L, TER, WER, and METEOR scores in one table, with optional
-  BERTScore F1 and embedding cosine columns.
-* `bleu()`, `chrf()`, `rouge()`, `ter()`, `wer()`, and `meteor()` are validated
-  against `sacrebleu`, `rouge-score`, `jiwer`, and `nltk`; see
+* `compare_strings()` returns Levenshtein, character Jaccard (`jaccard_char`),
+  cosine, word Jaccard (`jaccard_word`), BLEU, CHRF, ROUGE-1, ROUGE-L, TER,
+  WER, and METEOR scores in one table, with optional BERTScore F1 and
+  embedding cosine columns. The character Jaccard column was previously named
+  `jaccard`.
+* `bleu()`, `chrf()`, `rouge()`, `jaccard()`, `ter()`, `wer()`, and `meteor()`
+  are validated against `sacrebleu`, `rouge-score`, `jiwer`, and `nltk`; see
   `vignette("metrics")` for the settings and the known departures, and
   `dev/validation/` to reproduce the comparison.
 * Added the "Comparing strings with ditto" vignette, the "The metrics, and what

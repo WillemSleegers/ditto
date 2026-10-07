@@ -1,5 +1,5 @@
 # Shared tokenization, n-gram, and alignment helpers used by bleu(), chrf(),
-# rouge(), ter(), and meteor(). Not exported.
+# rouge(), jaccard(), ter(), and meteor(). Not exported.
 
 # The metrics score one pair of strings at a time. Erroring on longer vectors
 # stops a vectorized call from silently scoring only the first pair.

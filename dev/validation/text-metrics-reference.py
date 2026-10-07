@@ -1,7 +1,8 @@
 # text-metrics-reference.py ----------------------------------------------------
 #
-# Reference scores for validating ditto's bleu(), chrf(), rouge(), ter(), and
-# meteor() against the Python implementations people actually check against.
+# Reference scores for validating ditto's bleu(), chrf(), rouge(), jaccard(),
+# ter(), and meteor() against the Python implementations people actually check
+# against.
 # The BERTScore validation is separate (see bertscore-reference.py), because
 # only that one needs a model server.
 #
@@ -11,6 +12,7 @@
 # chrf()   sacrebleu.CHRF        the reference implementation of the metric
 # rouge()  rouge_score           Google's implementation, used by the
 #                                summarization literature
+# jaccard() nltk                 jaccard_distance, on sets of word n-grams
 # ter()    sacrebleu.TER         includes TERCOM's greedy shift search, which
 #                                ditto's ter() reproduces
 # wer()    jiwer.wer             wer() is ter() without the shift search, so
@@ -37,8 +39,10 @@ import re
 from pathlib import Path
 
 import jiwer
+from nltk.metrics.distance import jaccard_distance
 from nltk.stem.snowball import SnowballStemmer
 from nltk.translate.meteor_score import meteor_score
+from nltk.util import ngrams
 from rouge_score import rouge_scorer
 from sacrebleu.metrics import BLEU, CHRF, TER
 
@@ -87,13 +91,22 @@ rouge = rouge_scorer.RougeScorer(
     ["rouge1", "rouge2", "rougeL"], use_stemmer=False, tokenizer=DittoTokenizer()
 )
 
-# 5. TER: case_sensitive=True, because ditto compares the text as given while
+# 5. Jaccard: one minus nltk's Jaccard distance between the sets of word
+# n-grams. None of the pairs below leaves both sides without n-grams, the case
+# where nltk would divide by zero and ditto defines the score itself.
+def jaccard(candidate, reference, n):
+    cand = set(ngrams(tokenize(candidate), n))
+    ref = set(ngrams(tokenize(reference), n))
+    return 1 - jaccard_distance(cand, ref)
+
+
+# 6. TER: case_sensitive=True, because ditto compares the text as given while
 # sacrebleu lowercases by default. With normalized=False and no_punct=False the
 # tokenizer then only collapses whitespace, so the pre-tokenized text passes
 # through untouched.
 ter = TER(case_sensitive=True)
 
-# 6. METEOR: the Snowball English stemmer (the stemmer behind
+# 7. METEOR: the Snowball English stemmer (the stemmer behind
 # SnowballC::wordStem, not nltk's default Porter), a stubbed WordNet to disable
 # the synonym stage ditto omits, and alpha/beta/gamma equal to ditto's
 # f_mean = 10PR / (R + 9P) and penalty = 0.5 * (chunks / matches) ^ 3.
@@ -144,7 +157,7 @@ with out.open("w", newline="", encoding="utf-8") as fh:
     writer = csv.writer(fh, lineterminator="\n")
     writer.writerow(
         ["candidate", "reference", "bleu", "chrf", "rouge_1", "rouge_2", "rouge_l",
-         "ter", "wer", "meteor"]
+         "jaccard_1", "jaccard_2", "ter", "wer", "meteor"]
     )
     for candidate, reference in PAIRS:
         cand_tok, ref_tok = pretokenized(candidate), pretokenized(reference)
@@ -157,6 +170,8 @@ with out.open("w", newline="", encoding="utf-8") as fh:
             f"{scores['rouge1'].fmeasure:.10f}",
             f"{scores['rouge2'].fmeasure:.10f}",
             f"{scores['rougeL'].fmeasure:.10f}",
+            f"{jaccard(candidate, reference, 1):.10f}",
+            f"{jaccard(candidate, reference, 2):.10f}",
             f"{ter.sentence_score(cand_tok, [ref_tok]).score / 100:.10f}",
             f"{jiwer.wer(ref_tok, cand_tok):.10f}",
             f"{meteor(candidate, reference):.10f}",

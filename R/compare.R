@@ -1,12 +1,12 @@
 #' Compare strings across multiple similarity metrics
 #'
 #' Computes several similarity metrics for aligned candidate and reference
-#' strings and returns them in a single table. Edit-distance, n-gram, and
-#' character-frequency metrics come from [stringdist::stringsim()]; the
-#' translation metrics are computed by [bleu()], [chrf()], [rouge()], [ter()],
-#' [wer()], and [meteor()]. The embedding-based metrics (BERTScore F1 and
-#' whole-string cosine) are optional because they require a running
-#' `llama.cpp` server.
+#' strings and returns them in a single table. The character metrics
+#' (Levenshtein, character-set Jaccard, and character-frequency cosine) come
+#' from [stringdist::stringsim()]; the word metrics are computed by
+#' [jaccard()], [bleu()], [chrf()], [rouge()], [ter()], [wer()], and
+#' [meteor()]. The embedding-based metrics (BERTScore F1 and whole-string
+#' cosine) are optional because they require a running `llama.cpp` server.
 #'
 #' Inputs are compared as given; clean them first with [clean()] if surface
 #' differences such as case or punctuation should be ignored.
@@ -33,12 +33,13 @@
 #'   `bert = TRUE`.
 #' @return A [tibble][tibble::tibble] with one row per input pair, containing
 #'   the candidate and reference text and a column for each metric:
-#'   `levenshtein`, `jaccard`, `cosine` (character-frequency), `bleu`, `chrf`,
+#'   `levenshtein`, `jaccard_char` (character-set Jaccard), `cosine`
+#'   (character-frequency), `jaccard_word` (word-set Jaccard), `bleu`, `chrf`,
 #'   `rouge_1`, `rouge_l`, `ter`, `wer`, `meteor`, and, when `bert = TRUE`,
 #'   `bertscore_f1` and `cosine_emb` (whole-string embedding cosine).
-#' @seealso [bleu()], [chrf()], [rouge()], [ter()], [wer()], [meteor()],
-#'   [bertscore()], and [cosine_similarity()] for the individual metrics, and
-#'   [clean()] to normalise text before comparison.
+#' @seealso [jaccard()], [bleu()], [chrf()], [rouge()], [ter()], [wer()],
+#'   [meteor()], [bertscore()], and [cosine_similarity()] for the individual
+#'   metrics, and [clean()] to normalise text before comparison.
 #' @examples
 #' compare_strings(
 #'   c("how much do you agree with the statement", "what is your age"),
@@ -58,8 +59,9 @@ compare_strings <- function(candidate, reference, bert = FALSE, language = "en",
     candidate = candidate,
     reference = reference,
     levenshtein = stringdist::stringsim(candidate, reference, method = "lv"),
-    jaccard = stringdist::stringsim(candidate, reference, method = "jaccard"),
+    jaccard_char = stringdist::stringsim(candidate, reference, method = "jaccard"),
     cosine = stringdist::stringsim(candidate, reference, method = "cosine"),
+    jaccard_word = pairwise(jaccard),
     bleu = pairwise(bleu),
     chrf = pairwise(chrf),
     rouge_1 = pairwise(rouge, variant = "1"),

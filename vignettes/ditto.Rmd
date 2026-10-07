@@ -28,9 +28,9 @@ free-text responses.
 The metrics differ in what counts as a difference. Three character-level
 metrics -- edit distance, Jaccard, and cosine -- come from
 [`stringdist`](https://github.com/markvanderloo/stringdist) and are available
-only through `compare_strings()`. Six word-level metrics -- `bleu()`, `chrf()`,
-`rouge()`, `ter()`, `wer()`, and `meteor()` -- compare word or character
-sequences, and the embedding metrics `bertscore()` and `cosine_similarity()`
+only through `compare_strings()`. Seven word-level metrics -- `jaccard()`,
+`bleu()`, `chrf()`, `rouge()`, `ter()`, `wer()`, and `meteor()` -- compare word
+or character sequences, and the embedding metrics `bertscore()` and `cosine_similarity()`
 compare meaning through contextual embeddings; all of these can also be called
 on their own. `compare_strings()` runs the character- and word-level metrics
 together, and the embedding metrics too when an embedding server is available,
@@ -77,7 +77,7 @@ character frequencies).
 ```{r}
 #| label: compare
 result <- compare_strings(variants, reference)
-character_metrics <- c("levenshtein", "jaccard", "cosine")
+character_metrics <- c("levenshtein", "jaccard_char", "cosine")
 knitr::kable(cbind(label = labels, round(result[character_metrics], 2)))
 ```
 
@@ -88,6 +88,27 @@ of character frequencies, not to be confused with the meaning-based
 `cosine_similarity()` introduced later -- because it happens to reuse many of
 the same characters. None of these metrics compares meaning, so surface overlap
 can make an unrelated string look similar.
+
+## Word overlap
+
+`jaccard()` moves the same set comparison up from characters to words: the
+number of distinct words two strings share, divided by the number of distinct
+words in either. It ignores word order and how often a word repeats, and it is
+symmetric, so it makes no difference which string is the reference.
+
+```{r}
+#| label: jaccard
+jaccard("the cat sat on the mat", "a cat was sitting on the mat")
+```
+
+With `n = 2` or higher it compares sets of word n-grams instead, which brings
+word order in: a reversed sentence keeps every word but none of its bigrams.
+
+```{r}
+#| label: jaccard-n
+c(words = jaccard("the cat sat", "sat cat the"),
+  bigrams = jaccard("the cat sat", "sat cat the", n = 2))
+```
 
 ## BLEU
 
@@ -198,7 +219,9 @@ from the unrelated question far more sharply than the character metrics did:
 
 ```{r}
 #| label: word-metrics
-word_metrics <- c("bleu", "chrf", "rouge_1", "rouge_l", "ter", "wer", "meteor")
+word_metrics <- c(
+  "jaccard_word", "bleu", "chrf", "rouge_1", "rouge_l", "ter", "wer", "meteor"
+)
 knitr::kable(cbind(label = labels, round(result[word_metrics], 2)))
 ```
 
@@ -479,7 +502,11 @@ as a difference.
 - Use the **character metrics** when responses should closely match the
   reference and you expect only typos, small edits, or reordering. They are
   fast and need no external model. Cosine is usually the most informative of
-  the three; Jaccard adds little beside it.
+  the three; character Jaccard adds little beside it.
+- Use **word Jaccard** for a quick, symmetric measure of shared vocabulary,
+  such as grouping near-duplicate responses, when neither string is the
+  reference and repetition should not count. Raise `n` to make word order
+  matter.
 - Use **BLEU** when word order matters, such as translation evaluation, and
   you want a candidate penalised for rearranging or dropping words. Be aware
   that it collapses to 0 as soon as one n-gram order has no match, so it

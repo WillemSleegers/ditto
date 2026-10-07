@@ -41,18 +41,19 @@ rescaling, used when \code{bert = TRUE}; see \code{\link[=bertscore_baseline]{be
 \value{
 A \link[tibble:tibble]{tibble} with one row per input pair, containing
 the candidate and reference text and a column for each metric:
-\code{levenshtein}, \code{jaccard}, \code{cosine} (character-frequency), \code{bleu}, \code{chrf},
+\code{levenshtein}, \code{jaccard_char} (character-set Jaccard), \code{cosine}
+(character-frequency), \code{jaccard_word} (word-set Jaccard), \code{bleu}, \code{chrf},
 \code{rouge_1}, \code{rouge_l}, \code{ter}, \code{wer}, \code{meteor}, and, when \code{bert = TRUE},
 \code{bertscore_f1} and \code{cosine_emb} (whole-string embedding cosine).
 }
 \description{
 Computes several similarity metrics for aligned candidate and reference
-strings and returns them in a single table. Edit-distance, n-gram, and
-character-frequency metrics come from \code{\link[stringdist:stringsim]{stringdist::stringsim()}}; the
-translation metrics are computed by \code{\link[=bleu]{bleu()}}, \code{\link[=chrf]{chrf()}}, \code{\link[=rouge]{rouge()}}, \code{\link[=ter]{ter()}},
-\code{\link[=wer]{wer()}}, and \code{\link[=meteor]{meteor()}}. The embedding-based metrics (BERTScore F1 and
-whole-string cosine) are optional because they require a running
-\code{llama.cpp} server.
+strings and returns them in a single table. The character metrics
+(Levenshtein, character-set Jaccard, and character-frequency cosine) come
+from \code{\link[stringdist:stringsim]{stringdist::stringsim()}}; the word metrics are computed by
+\code{\link[=jaccard]{jaccard()}}, \code{\link[=bleu]{bleu()}}, \code{\link[=chrf]{chrf()}}, \code{\link[=rouge]{rouge()}}, \code{\link[=ter]{ter()}}, \code{\link[=wer]{wer()}}, and
+\code{\link[=meteor]{meteor()}}. The embedding-based metrics (BERTScore F1 and whole-string
+cosine) are optional because they require a running \code{llama.cpp} server.
 }
 \details{
 Inputs are compared as given; clean them first with \code{\link[=clean]{clean()}} if surface
@@ -71,7 +72,7 @@ compare_strings(
 )
 }
 \seealso{
-\code{\link[=bleu]{bleu()}}, \code{\link[=chrf]{chrf()}}, \code{\link[=rouge]{rouge()}}, \code{\link[=ter]{ter()}}, \code{\link[=wer]{wer()}}, \code{\link[=meteor]{meteor()}},
-\code{\link[=bertscore]{bertscore()}}, and \code{\link[=cosine_similarity]{cosine_similarity()}} for the individual metrics, and
-\code{\link[=clean]{clean()}} to normalise text before comparison.
+\code{\link[=jaccard]{jaccard()}}, \code{\link[=bleu]{bleu()}}, \code{\link[=chrf]{chrf()}}, \code{\link[=rouge]{rouge()}}, \code{\link[=ter]{ter()}}, \code{\link[=wer]{wer()}},
+\code{\link[=meteor]{meteor()}}, \code{\link[=bertscore]{bertscore()}}, and \code{\link[=cosine_similarity]{cosine_similarity()}} for the individual
+metrics, and \code{\link[=clean]{clean()}} to normalise text before comparison.
 }

@@ -1,6 +1,6 @@
 # text-metrics-ditto.R ---------------------------------------------------------
 #
-# ditto's own bleu(), chrf(), rouge(), ter(), and meteor() for the validation
+# ditto's own bleu(), chrf(), rouge(), jaccard(), ter(), and meteor() for the validation
 # pairs, the R counterpart to text-metrics-reference.py. It scores the same
 # pairs, writes text_metrics_ditto_scores.csv, and diffs the two.
 #
@@ -32,6 +32,8 @@ scores <- data.frame(
   rouge_1 = pairwise(rouge, variant = "1"),
   rouge_2 = pairwise(rouge, variant = "2"),
   rouge_l = pairwise(rouge, variant = "l"),
+  jaccard_1 = pairwise(jaccard, n = 1),
+  jaccard_2 = pairwise(jaccard, n = 2),
   ter = pairwise(ter),
   wer = pairwise(wer),
   meteor = pairwise(meteor)
@@ -68,6 +70,8 @@ ok <- c(
   check("rouge_1", scores$rouge_1, reference$rouge_1),
   check("rouge_2", scores$rouge_2, reference$rouge_2),
   check("rouge_l", scores$rouge_l, reference$rouge_l),
+  check("jaccard_1", scores$jaccard_1, reference$jaccard_1),
+  check("jaccard_2", scores$jaccard_2, reference$jaccard_2),
   check("ter", scores$ter, reference$ter),
   check("wer", scores$wer, reference$wer),
   check("meteor", scores$meteor, reference$meteor)

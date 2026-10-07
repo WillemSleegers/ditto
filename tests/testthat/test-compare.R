@@ -6,13 +6,14 @@ test_that("the surface metrics are returned in one row per pair", {
   expect_s3_class(out, "tbl_df")
   expect_equal(nrow(out), 2)
   expect_named(out, c(
-    "candidate", "reference", "levenshtein", "jaccard", "cosine",
-    "bleu", "chrf", "rouge_1", "rouge_l", "ter", "wer", "meteor"
+    "candidate", "reference", "levenshtein", "jaccard_char", "cosine",
+    "jaccard_word", "bleu", "chrf", "rouge_1", "rouge_l", "ter", "wer", "meteor"
   ))
 })
 
 test_that("each column agrees with calling the metric directly", {
   out <- compare_strings(candidates, references)
+  expect_equal(out$jaccard_word, mapply(jaccard, candidates, references, USE.NAMES = FALSE))
   expect_equal(out$bleu, mapply(bleu, candidates, references, USE.NAMES = FALSE))
   expect_equal(out$chrf, mapply(chrf, candidates, references, USE.NAMES = FALSE))
   expect_equal(out$ter, mapply(ter, candidates, references, USE.NAMES = FALSE))
@@ -48,6 +49,8 @@ test_that("rouge_l sees word order where rouge_1 does not", {
 
 test_that("an identical pair scores 1 on the similarities and 0 on ter", {
   out <- compare_strings("the cat sat", "the cat sat")
+  expect_equal(out$jaccard_char, 1)
+  expect_equal(out$jaccard_word, 1)
   expect_equal(out$bleu, 1)
   expect_equal(out$chrf, 1)
   expect_equal(out$rouge_1, 1)
@@ -72,6 +75,7 @@ test_that("language is passed through to the meteor column", {
 
 test_that("a missing input gives missing scores rather than scoring \"NA\"", {
   out <- compare_strings(c("a b", NA), c("a b", "a b"))
+  expect_identical(out$jaccard_word, c(1, NA_real_))
   expect_identical(out$bleu, c(1, NA_real_))
   expect_identical(out$ter, c(0, NA_real_))
   expect_identical(out$meteor[2], NA_real_)
